@@ -132,7 +132,7 @@ export default function App() {
       page = <StatsPage />;
       break;
     case "body":
-      page = <BodyPage tab={(a as "weight" | "inbody" | "diet" | "parts") ?? "weight"} part={b} />;
+      page = <BodyPage tab={(a as "weight" | "inbody" | "diet" | "parts" | "fat") ?? "weight"} part={b} />;
       break;
     case "plan":
       page = (

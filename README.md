@@ -74,6 +74,13 @@ totals are cross-checked; anything doubtful opens in the scan form for a quick c
 are trained on Google Research's HierText dataset and licensed CC BY-SA 4.0 (see
 `crates/ocr/models/README.md`).
 
+### Body fat estimates
+
+Measure → Body fat plots body fat from InBody scans, body fat logged in Strong, and two tape
+estimates: the US Navy method (waist and neck, plus hips for women, measured within two weeks)
+and relative fat mass (height and waist). Lean mass is weight × (1 − body fat) at the nearest
+weigh-in, next to InBody's fat-free and skeletal muscle mass (`src/bodyfat.ts`).
+
 ## Development
 
 ```sh

@@ -18,6 +18,7 @@ import { usePrefs } from "../App";
 import { RangePicker, inRange, presetRange, today, type Range } from "../charts/RangePicker";
 import { TimeSeriesChart, type Band, type Point } from "../charts/TimeSeriesChart";
 import { useChartTheme } from "../charts/theme";
+import { BodyFatTab } from "../components/BodyFatTab";
 import { Modal } from "../components/Modal";
 import { ShareButton } from "../share/ShareDialog";
 import { formatDate, formatTime, nowLocal, parseLocal, toUnit } from "../format";
@@ -25,7 +26,7 @@ import { GOAL_TEXT, goalStatus, type GoalInfo } from "../goal";
 import { fileToBase64 } from "../platform";
 
 const KG_PER_LB = 0.45359237;
-type Tab = "weight" | "inbody" | "diet" | "parts";
+type Tab = "weight" | "inbody" | "diet" | "parts" | "fat";
 
 export default function BodyPage({ tab, part }: { tab: Tab; part?: string }) {
   return (
@@ -33,14 +34,15 @@ export default function BodyPage({ tab, part }: { tab: Tab; part?: string }) {
       <h1 className="page-title">Measure</h1>
       <GoalPanel />
       <div className="segmented tabs-scroll">
-        {(["weight", "parts", "inbody", "diet"] as Tab[]).map((t) => (
+        {(["weight", "parts", "fat", "inbody", "diet"] as Tab[]).map((t) => (
           <a key={t} href={`#/body/${t}`} className={tab === t ? "seg-link active" : "seg-link"}>
-            {{ weight: "Weight", parts: "Body parts", inbody: "Body comp", diet: "Calories" }[t]}
+            {{ weight: "Weight", parts: "Body parts", fat: "Body fat", inbody: "Body comp", diet: "Calories" }[t]}
           </a>
         ))}
       </div>
       {tab === "weight" && <BodyweightTab />}
       {tab === "parts" && <BodyPartsTab part={part} />}
+      {tab === "fat" && <BodyFatTab />}
       {tab === "inbody" && <InBodyTab />}
       {tab === "diet" && <DietTab />}
     </div>
