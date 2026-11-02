@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api, type EnergyPoint, type WeighInRow } from "../api";
 import { usePrefs } from "../App";
 import { today } from "../charts/RangePicker";
-import { formatDate, nowLocal, parseLocal, toUnit } from "../format";
+import { nowLocal, parseLocal, toUnit } from "../format";
 import { GOAL_TEXT, goalStatus, type GoalInfo } from "../goal";
 import { loadWeighInPlan, type WeighInPlan } from "../weighIn";
 
@@ -43,50 +43,56 @@ export function TodayCard() {
   }
 
   const target =
-    s && (s.targetKg[0] === s.targetKg[1] ? signed(u(s.targetKg[0]), 2) : `${signed(u(s.targetKg[0]))} to ${signed(u(s.targetKg[1]))}`);
+    s && (s.targetKg[0] === s.targetKg[1] ? signed(u(s.targetKg[0]), 2) : `${signed(u(s.targetKg[0]))}…${signed(u(s.targetKg[1]))}`);
+  const kcal = (v: number) => Math.round(v).toLocaleString();
+  const close = s?.offKcal != null && Math.abs(s.offKcal) <= 100;
+  const stale = last && parseLocal(last.at).getTime() < Date.now() - 10 * 86400000;
   return (
     <section className="card today-card">
       <div className="today-grid">
-        <a className="today-stat" href="#/body/weight">
-          <span className="muted small">Weight{last ? ` · ${formatDate(last.at)}` : ""}</span>
+        <a className="today-stat" href="#/body/weight" title={stale ? "No weigh-in for over a week" : undefined}>
+          <span className={`small ${stale ? "warn" : "muted"}`}>{last ? parseLocal(last.at).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "Weight"}</span>
           <strong>{last ? `${u(last.weight_kg).toFixed(1)} ${unit}` : "—"}</strong>
           {s && (
             <span className="small">
-              {s.actualKg == null ? (
-                <span className="muted">
-                  {GOAL_TEXT[s.goal]} {target} {unit}/wk
-                </span>
-              ) : (
-                <>
-                  <span className={s.onTrack ? "success" : "warn"}>
-                    {signed(u(s.actualKg), 2)} {unit}/wk
-                  </span>{" "}
-                  <span className="muted">
-                    vs {target} ({GOAL_TEXT[s.goal].toLowerCase()})
-                  </span>
-                </>
+              {s.actualKg != null && (
+                <span className={s.onTrack ? "success" : "warn"}>{signed(u(s.actualKg), 2)}/wk</span>
               )}
+              <span className="muted">
+                {s.actualKg == null ? GOAL_TEXT[s.goal] : " · goal"} {target}
+                {s.actualKg == null ? ` ${unit}/wk` : ""}
+              </span>
             </span>
           )}
         </a>
         <a className="today-stat" href="#/body/diet">
-          <span className="muted small">Calories</span>
-          {s?.offKcal != null ? (
+          {s?.eatKcal != null ? (
             <>
-              <strong className={Math.abs(s.offKcal) <= 100 ? "success" : "warn"}>
-                {Math.abs(s.offKcal) <= 100 ? "On target" : `${signed(Math.round(s.offKcal), 0)} kcal/day`}
-              </strong>
-              <span className="small muted">
-                {signed(Math.round(s.balanceKcal!), 0)} vs {signed(Math.round(s.targetKcal), 0)} target balance
+              <span className="small muted">Eat for goal</span>
+              <strong>{kcal(s.eatKcal)} kcal</strong>
+              <span className={`small ${close ? "success" : "warn"}`}>
+                {close ? "on track" : `${signed(Math.round(s.offKcal!), 0)}/day`}
+                <span className="muted"> · eating {kcal(s.intakeKcal!)}</span>
               </span>
             </>
+          ) : s?.offKcal != null ? (
+            <>
+              <span className="small muted">Trend vs goal</span>
+              <strong className={close ? "success" : "warn"}>
+                {close ? "On track" : `${signed(Math.round(s.offKcal), 0)} kcal/d`}
+              </strong>
+              <span className="small muted">log kcal for a target</span>
+            </>
           ) : (
-            <span className="small muted">Log calories to compare with your goal</span>
+            <>
+              <span className="small muted">Calories</span>
+              <span className="small muted">log calories and weigh-ins</span>
+            </>
           )}
         </a>
         <div className="today-stat">
           <span className={`small ${weighDay && !loggedToday ? "warn" : "muted"}`}>
-            {loggedToday ? "Weighed in today ✓" : weighDay ? "Weigh-in day" : "Quick weigh-in"}
+            {loggedToday ? "Weighed ✓" : weighDay ? "Weigh-in day" : "Weigh-in"}
           </span>
           <div className="row tight">
             <input
@@ -103,9 +109,6 @@ export function TodayCard() {
           </div>
         </div>
       </div>
-      {last && parseLocal(last.at).getTime() < Date.now() - 10 * 86400000 && (
-        <p className="small muted">No weigh-in for over a week, so the trend may be stale.</p>
-      )}
     </section>
   );
 }

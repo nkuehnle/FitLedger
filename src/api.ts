@@ -1,7 +1,19 @@
 // Typed wrappers around the Tauri commands in src-tauri/src/lib.rs.
 // Types mirror the Rust structs in crates/core (serde field names).
 
-import { invoke } from "@tauri-apps/api/core";
+import { invoke as tauriInvoke, type InvokeArgs } from "@tauri-apps/api/core";
+
+/** On Android the page can load before the app has opened its database; wait for it and retry. */
+async function invoke<T>(cmd: string, args?: InvokeArgs): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await tauriInvoke<T>(cmd, args);
+    } catch (e) {
+      if (attempt >= 50 || !String(e).includes("state not managed")) throw e;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
+}
 
 export type WeightUnit = "kg" | "lb";
 export type DistanceUnit = "m" | "km" | "ft" | "mi";
@@ -665,8 +677,10 @@ export const api = {
   dbInfo: () => invoke<BackupInfo>("db_info"),
   saveBase64: (path: string, data: string) => invoke<void>("save_base64", { path, data }),
   copyPng: (data: string) => invoke<void>("copy_png", { data }),
-  shareExport: (kind: "strong" | "bodyweight" | "inbody" | "diet" | "measurements" | "json") => invoke<void>("share_export", { kind }),
-  shareBackup: () => invoke<BackupInfo>("share_backup"),
+  /** Android: opens the share sheet, or with toDownloads saves to Downloads/Liftbook and returns where. */
+  shareExport: (kind: "strong" | "bodyweight" | "inbody" | "diet" | "measurements" | "json", toDownloads: boolean) =>
+    invoke<string | null>("share_export", { kind, toDownloads }),
+  shareBackup: (toDownloads: boolean) => invoke<[BackupInfo, string | null]>("share_backup", { toDownloads }),
   sharePng: (name: string, data: string) => invoke<void>("share_png", { name, data }),
   savePngToPhotos: (name: string, data: string) => invoke<void>("save_png_to_photos", { name, data }),
   stageBackup: (data: string) => invoke<{ path: string; info: BackupInfo }>("stage_backup", { data }),

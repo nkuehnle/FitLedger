@@ -705,12 +705,22 @@ fn share_file(app: &tauri::AppHandle, path: &std::path::Path, mime: &str, title:
     native_call(app, "shareFile", serde_json::json!({ "path": path.to_string_lossy(), "mime": mime, "title": title }))
 }
 
+/// Shares the file, or with `to_downloads` copies it into Downloads/Liftbook and says where.
+fn share_or_save(app: &tauri::AppHandle, path: &std::path::Path, mime: &str, title: &str, to_downloads: bool) -> CmdResult<Option<String>> {
+    if !to_downloads {
+        return share_file(app, path, mime, title).map(|_| None);
+    }
+    native_call(app, "saveDownload", serde_json::json!({ "path": path.to_string_lossy(), "mime": mime, "title": "" }))?;
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    Ok(Some(format!("Download/Liftbook/{name}")))
+}
+
 fn today_stamp() -> String {
     Local::now().format("%Y-%m-%d").to_string()
 }
 
 #[tauri::command]
-fn share_export(app: tauri::AppHandle, state: State<AppState>, kind: String) -> CmdResult<()> {
+fn share_export(app: tauri::AppHandle, state: State<AppState>, kind: String, to_downloads: bool) -> CmdResult<Option<String>> {
     let text = export_text(&state, &kind)?;
     let (name, mime) = match kind.as_str() {
         "json" => ("liftbook-export.json", "application/json"),
@@ -722,15 +732,15 @@ fn share_export(app: tauri::AppHandle, state: State<AppState>, kind: String) -> 
     };
     let path = share_dir(&app)?.join(name.replace("liftbook-", &format!("liftbook-{}-", today_stamp())));
     std::fs::write(&path, text).map_err(|e| e.to_string())?;
-    share_file(&app, &path, mime, "Export")
+    share_or_save(&app, &path, mime, "Export", to_downloads)
 }
 
 #[tauri::command]
-fn share_backup(app: tauri::AppHandle, state: State<AppState>) -> CmdResult<BackupInfo> {
+fn share_backup(app: tauri::AppHandle, state: State<AppState>, to_downloads: bool) -> CmdResult<(BackupInfo, Option<String>)> {
     let path = share_dir(&app)?.join(format!("liftbook-{}.liftbook", today_stamp()));
     let info = backup_to(state, path.to_string_lossy().into_owned())?;
-    share_file(&app, &path, "application/octet-stream", "Save backup")?;
-    Ok(info)
+    let saved = share_or_save(&app, &path, "application/octet-stream", "Save backup", to_downloads)?;
+    Ok((info, saved))
 }
 
 #[tauri::command]

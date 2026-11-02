@@ -58,10 +58,39 @@ export default function DataPage() {
     }
   }
 
-  async function onFile(file: File | undefined) {
-    if (!file) return;
-    const text = await file.text();
-    await preview(file.name, text, detectKind(text));
+  async function onFiles(list: FileList | null) {
+    const files = [...(list ?? [])];
+    if (files.length === 1) {
+      const text = await files[0].text();
+      await preview(files[0].name, text, detectKind(text));
+      return;
+    }
+    if (!files.length) return;
+    // Strong exports each body measurement on its own, so several of those import in one go.
+    setError(null);
+    setMessage(null);
+    setPending(null);
+    const texts = await Promise.all(files.map((f) => f.text()));
+    if (texts.some((t) => detectKind(t) !== "measurements")) {
+      setError("Pick several files only for body measurements; workouts and bodyweight go one file at a time.");
+      return;
+    }
+    setBusy(true);
+    try {
+      let inserted = 0;
+      let skipped = 0;
+      for (const [i, text] of texts.entries()) {
+        const r = await api.importMeasurements(text, files[i].name);
+        inserted += r.inserted;
+        skipped += r.skipped;
+      }
+      setMessage(`Imported ${inserted} measurements from ${files.length} files` + (skipped ? `, skipped ${skipped} already imported` : "") + ".");
+      refresh();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function commit() {
@@ -117,12 +146,12 @@ export default function DataPage() {
       <section className="card">
         <h2 className="section-title">Strong export</h2>
         <p className="muted small">
-          In Strong: Settings → Export data. Choose the workouts, bodyweight or a body measurement CSV (e.g. neck); Liftbook tells them
-          apart. Importing the same file again won't create duplicates.
+          In Strong: Settings → Export data. Choose the workouts, bodyweight or body measurement CSVs (several measurement files at
+          once is fine); Liftbook tells them apart. Importing the same file again won't create duplicates.
         </p>
         <label className="button primary file-button">
-          Choose CSV file
-          <input type="file" accept=".csv,text/csv" onChange={(e) => onFile(e.target.files?.[0])} hidden />
+          Choose CSV files
+          <input type="file" accept=".csv,text/csv" multiple onChange={(e) => onFiles(e.target.files)} hidden />
         </label>
       </section>
 
@@ -229,6 +258,7 @@ function ExportBackup() {
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<{ path: string; backup: BackupInfo; local: BackupInfo } | null>(null);
+  const [shareExports, setShareExports] = useState(false);
   useEffect(() => {
     api.getSetting("last_backup_at").then(setLast);
   }, []);
@@ -244,8 +274,8 @@ function ExportBackup() {
   const exportTo = (kind: "strong" | "bodyweight" | "inbody" | "diet" | "measurements" | "json", name: string, ext: string) =>
     run(async () => {
       if (IS_ANDROID) {
-        await api.shareExport(kind);
-        return null;
+        const saved = await api.shareExport(kind, !shareExports);
+        return saved && `Saved to ${saved}`;
       }
       const path = await save({ defaultPath: `${name}-${today()}.${ext}`, filters: [{ name: ext.toUpperCase(), extensions: [ext] }] });
       if (!path) return null;
@@ -273,9 +303,9 @@ function ExportBackup() {
             onClick={() =>
               run(async () => {
                 if (IS_ANDROID) {
-                  const info = await api.shareBackup();
+                  const [info, saved] = await api.shareBackup(true);
                   setLast(await api.getSetting("last_backup_at"));
-                  return `Backup of ${info.workouts} workouts ready: pick where to keep it (Drive, Files…).`;
+                  return `Saved ${info.workouts} workouts to ${saved}. Restore… can open it from there.`;
                 }
                 const path = await save({
                   defaultPath: `liftbook-${today()}.liftbook`,
@@ -288,8 +318,22 @@ function ExportBackup() {
               })
             }
           >
-            Back up now
+            {IS_ANDROID ? "Save to Downloads" : "Back up now"}
           </button>
+          {IS_ANDROID && (
+            <button
+              className="button"
+              onClick={() =>
+                run(async () => {
+                  const [info] = await api.shareBackup(false);
+                  setLast(await api.getSetting("last_backup_at"));
+                  return `Backup of ${info.workouts} workouts ready: pick where to keep it (Drive, Files…).`;
+                })
+              }
+            >
+              Share…
+            </button>
+          )}
           {IS_ANDROID ? (
             <label className="button">
               Restore…
@@ -404,7 +448,12 @@ function ExportBackup() {
             <span className="muted">›</span>
           </button>
         </div>
-        <p className="muted small">Cloud backup (Google Drive etc.) is planned for a later version.</p>
+        {IS_ANDROID && (
+          <label className="check small muted">
+            <input type="checkbox" checked={shareExports} onChange={(e) => setShareExports(e.target.checked)} />
+            Open the share sheet instead of saving to Downloads/Liftbook
+          </label>
+        )}
       </section>
       {msg && <p className="success small">{msg}</p>}
       {error && <p className="error">{error}</p>}

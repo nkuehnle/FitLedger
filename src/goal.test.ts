@@ -18,17 +18,31 @@ describe("goalStatus", () => {
     expect(s.targetKg).toEqual([-1, -0.5]);
     expect(s.actualKg).toBeCloseTo(-0.5);
     expect(s.onTrack).toBe(true);
-    expect(s.offKcal).toBeNull();
+    // No energy balance yet: the weigh-in rate gives it (−550 vs the −825 midpoint).
+    expect(s.balanceKcal).toBeCloseTo(-550);
+    expect(s.offKcal).toBeCloseTo(275);
+    expect(s.eatKcal).toBeNull();
   });
 
   it("uses the user's own weekly target and the energy balance", () => {
     const s = goalStatus({ ...cut, weekly_rate_kg: -0.9 }, rows, [
-      { date: "2026-11-01", trend_kg: 100, balance_kcal: -400, avg_intake_kcal: 2000, tdee_kcal: 2400 },
+      { date: daysAgo(1).slice(0, 10), trend_kg: 100, balance_kcal: -400, avg_intake_kcal: 2000, tdee_kcal: 2400 },
     ])!;
     expect(s.targetKg).toEqual([-0.9, -0.9]);
     expect(s.onTrack).toBe(false);
     expect(s.targetKcal).toBeCloseTo(-990);
     expect(s.offKcal).toBeCloseTo(590);
+    // Maintenance 2,400 with a −990 target: eat ~1,410, i.e. 590 less than the 2,000 logged.
+    expect(s.intakeKcal).toBe(2000);
+    expect(s.eatKcal).toBeCloseTo(1410);
+  });
+
+  it("ignores a stale maintenance estimate", () => {
+    const s = goalStatus(cut, rows, [
+      { date: daysAgo(40).slice(0, 10), trend_kg: 100, balance_kcal: -400, avg_intake_kcal: 2000, tdee_kcal: 2400 },
+    ])!;
+    expect(s.tdeeKcal).toBeNull();
+    expect(s.eatKcal).toBeNull();
   });
 
   it("needs a goal and weigh-ins", () => {

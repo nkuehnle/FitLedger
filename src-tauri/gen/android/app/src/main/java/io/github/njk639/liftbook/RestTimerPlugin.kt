@@ -10,7 +10,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.AudioAttributes
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -25,16 +24,16 @@ import app.tauri.plugin.Plugin
  * Rest timer and workout status outside the app:
  * - an ongoing notification in the shade (rest countdown, or the workout clock between sets),
  *   tapping it opens the app;
- * - an exact alarm at the end of the rest that vibrates and alerts even with the screen off,
- *   in another app, or after the app was swiped away.
+ * - [RestChimeService] for the length of the rest: it buzzes on each of the last 3 seconds and
+ *   plays a chime on the media stream at 0, even with the screen off or in another app; an exact
+ *   alarm 3 s before the end restarts it if it was killed.
  */
 object RestNotifications {
     const val CHANNEL_STATUS = "workout_status"
-    // v3: the channel plays the app's own beep on the alarm stream, so it follows alarm volume and
-    // sounds with the ringer on vibrate. The system plays it, so newer Android versions don't mute
-    // it as background audio. Channels can't be changed once created, hence the new id.
-    const val CHANNEL_ALERT = "rest_over_v3"
-    private val OLD_CHANNELS = listOf("rest_over", "rest_over_v2")
+    // v4: silent; RestChimeService plays the chime (media volume) and the countdown vibration.
+    // Channels can't be changed once created, hence the new id.
+    const val CHANNEL_ALERT = "rest_over_v4"
+    private val OLD_CHANNELS = listOf("rest_over", "rest_over_v2", "rest_over_v3")
     const val ID_STATUS = 1001
     const val ID_ALERT = 1002
     const val ACTION_REST_OVER = "io.github.njk639.liftbook.REST_OVER"
@@ -52,16 +51,9 @@ object RestNotifications {
         )
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ALERT, "Rest over", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Alerts you when it's time for your next set"
-                enableVibration(true)
-                vibrationPattern = longArrayOf(0, 200, 120, 200)
-                setSound(
-                    android.net.Uri.parse("android.resource://${ctx.packageName}/${R.raw.rest_beep}"),
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build(),
-                )
+                description = "Shows when it's time for your next set (the chime follows media volume)"
+                enableVibration(false)
+                setSound(null, null)
             },
         )
     }
@@ -80,7 +72,11 @@ object RestNotifications {
     fun showStatus(ctx: Context, title: String, text: String, whenMs: Long, countdown: Boolean) {
         ensureChannels(ctx)
         if (!canPost(ctx)) return
-        val n = NotificationCompat.Builder(ctx, CHANNEL_STATUS)
+        NotificationManagerCompat.from(ctx).notify(ID_STATUS, buildStatus(ctx, title, text, whenMs, countdown))
+    }
+
+    fun buildStatus(ctx: Context, title: String, text: String, whenMs: Long, countdown: Boolean): android.app.Notification =
+        NotificationCompat.Builder(ctx, CHANNEL_STATUS)
             .setSmallIcon(ctx.applicationInfo.icon)
             .setContentTitle(title)
             .setContentText(text)
@@ -95,11 +91,7 @@ object RestNotifications {
             .setShowWhen(true)
             .setContentIntent(openApp(ctx))
             .build()
-        NotificationManagerCompat.from(ctx).notify(ID_STATUS, n)
-    }
 
-    // The "Rest over" channel carries the vibration (200 ms, pause, 200 ms) and the beep; a direct
-    // Vibrator or MediaPlayer call can be ignored or muted when the app is in the background.
     fun alertRestOver(ctx: Context, text: String) {
         ensureChannels(ctx)
         if (!canPost(ctx)) return
@@ -108,7 +100,7 @@ object RestNotifications {
             .setContentTitle("Rest over")
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setVibrate(longArrayOf(0, 200, 120, 200))
+            .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
@@ -118,45 +110,66 @@ object RestNotifications {
         NotificationManagerCompat.from(ctx).notify(ID_ALERT, n)
     }
 
-    private fun alarmIntent(ctx: Context, text: String, workoutStart: Long, title: String): PendingIntent {
+    private fun alarmIntent(ctx: Context, endsAt: Long, text: String, workoutStart: Long, title: String): PendingIntent {
         val i = Intent(ctx, RestOverReceiver::class.java).setAction(ACTION_REST_OVER)
-            .putExtra("text", text).putExtra("workoutStart", workoutStart).putExtra("title", title)
+            .putExtra("endsAt", endsAt).putExtra("text", text).putExtra("workoutStart", workoutStart).putExtra("title", title)
         return PendingIntent.getBroadcast(ctx, 0, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
+    /** Starts the countdown service: from the alarm (allowed in the background) or from the app. */
+    fun startChime(ctx: Context, endsAt: Long, text: String, workoutStart: Long, title: String) {
+        val i = Intent(ctx, RestChimeService::class.java)
+            .putExtra("endsAt", endsAt).putExtra("text", text).putExtra("workoutStart", workoutStart).putExtra("title", title)
+        ContextCompat.startForegroundService(ctx, i)
+    }
+
     fun scheduleRestOver(ctx: Context, atMs: Long, text: String, workoutStart: Long, title: String) {
+        cancelRestOver(ctx, stopChime = false) // the new start replaces the running countdown
+        // Started now, while the app is in front, the service may play audio in the background later;
+        // one started by the alarm would be muted. The alarm is the backup if the service gets killed.
+        startChime(ctx, atMs, text, workoutStart, title)
+        val wakeAt = atMs - RestChimeService.LEAD_MS
+        if (wakeAt <= System.currentTimeMillis()) return
         val am = ctx.getSystemService(AlarmManager::class.java)
-        val pi = alarmIntent(ctx, text, workoutStart, title)
+        val pi = alarmIntent(ctx, atMs, text, workoutStart, title)
         if (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()) {
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, pi)
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, wakeAt, pi)
         } else {
-            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, pi)
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, wakeAt, pi)
         }
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putLong("restEndsAt", atMs).apply()
     }
 
-    fun cancelRestOver(ctx: Context) {
+    fun cancelRestOver(ctx: Context, stopChime: Boolean = true, removeStatus: Boolean = false) {
         val am = ctx.getSystemService(AlarmManager::class.java)
-        am.cancel(alarmIntent(ctx, "", 0, ""))
+        am.cancel(alarmIntent(ctx, 0, "", 0, ""))
+        // Not stopService: that would take the status notification (the service's) with it.
+        if (stopChime && RestChimeService.running) {
+            ctx.startService(
+                Intent(ctx, RestChimeService::class.java).setAction(RestChimeService.ACTION_STOP).putExtra("remove", removeStatus),
+            )
+        }
         NotificationManagerCompat.from(ctx).cancel(ID_ALERT)
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("restEndsAt").apply()
     }
 
     fun clearAll(ctx: Context) {
-        cancelRestOver(ctx)
+        cancelRestOver(ctx, removeStatus = true)
         NotificationManagerCompat.from(ctx).cancel(ID_STATUS)
     }
 }
 
-/** Fires at the end of a rest, even if the app process is gone. */
+/** Fires 3 s before the end of a rest and (re)starts the countdown service, even if the app process is gone. */
 class RestOverReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         if (intent.action != RestNotifications.ACTION_REST_OVER) return
-        val text = intent.getStringExtra("text") ?: "Time for your next set"
-        RestNotifications.alertRestOver(ctx, text)
-        val start = intent.getLongExtra("workoutStart", 0L)
-        val title = intent.getStringExtra("title") ?: "Workout in progress"
-        if (start > 0) RestNotifications.showStatus(ctx, title, "Ready for your next set", start, false)
+        RestNotifications.startChime(
+            ctx,
+            intent.getLongExtra("endsAt", System.currentTimeMillis()),
+            intent.getStringExtra("text") ?: "Time for your next set",
+            intent.getLongExtra("workoutStart", 0L),
+            intent.getStringExtra("title") ?: "Workout in progress",
+        )
     }
 }
 
@@ -275,21 +288,31 @@ class RestTimerPlugin(private val activity: Activity) : Plugin(activity) {
     /** Copies an image from the app's cache into the gallery (Pictures/Liftbook). */
     @Command
     fun saveImage(invoke: Invoke) {
+        saveTo(invoke, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "Pictures/Liftbook", "Saving to Photos")
+    }
+
+    /** Copies a backup or export from the app's cache into Downloads/Liftbook. */
+    @Command
+    fun saveDownload(invoke: Invoke) {
+        saveTo(invoke, android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, "Download/Liftbook", "Saving to Downloads")
+    }
+
+    private fun saveTo(invoke: Invoke, collection: android.net.Uri, folder: String, what: String) {
         val a = invoke.parseArgs(ShareArgs::class.java)
         val file = java.io.File(a.path)
         if (Build.VERSION.SDK_INT < 29) {
-            invoke.reject("Saving to Photos needs Android 10 or newer; use Share instead")
+            invoke.reject("$what needs Android 10 or newer; use Share instead")
             return
         }
         val values = android.content.ContentValues().apply {
-            put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, file.name)
-            put(android.provider.MediaStore.Images.Media.MIME_TYPE, a.mime)
-            put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Liftbook")
+            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, file.name)
+            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, a.mime)
+            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, folder)
         }
         val resolver = activity.contentResolver
-        val uri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+        val uri = resolver.insert(collection, values)
         if (uri == null) {
-            invoke.reject("Couldn't save the image")
+            invoke.reject("Couldn't save the file")
             return
         }
         resolver.openOutputStream(uri)!!.use { out -> file.inputStream().use { it.copyTo(out) } }

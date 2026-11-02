@@ -22,6 +22,10 @@ export interface GoalStatus {
   targetKcal: number;
   balanceKcal: number | null;
   offKcal: number | null;
+  /** From logged calories + weight change: average intake, maintenance, and what to eat for the target. */
+  intakeKcal: number | null;
+  tdeeKcal: number | null;
+  eatKcal: number | null;
 }
 
 /** Where the current goal stands, from weigh-ins (and the energy balance when diet is logged). */
@@ -46,7 +50,13 @@ export function goalStatus(info: GoalInfo | null, rows: WeighInRow[], energy: En
   const onTrack = actualKg == null ? null : actualKg >= lo && actualKg <= hi;
 
   const targetKcal = (((targetKg[0] + targetKg[1]) / 2) * KCAL_PER_KG) / 7;
-  const balanceKcal = [...energy].reverse().find((p) => p.balance_kcal != null)?.balance_kcal ?? null;
+  const latest = [...energy].reverse();
+  // Without an energy-balance point, the 3-week weigh-in rate still gives the balance.
+  const balanceKcal =
+    latest.find((p) => p.balance_kcal != null)?.balance_kcal ?? (actualKg == null ? null : (actualKg * KCAL_PER_KG) / 7);
+  // Maintenance needs recent intake; an estimate older than 3 weeks is stale.
+  const withTdee = latest.find((p) => p.tdee_kcal != null && now - parseLocal(p.date).getTime() < 21 * 86400000);
+  const tdeeKcal = withTdee?.tdee_kcal ?? null;
   return {
     goal: info.goal,
     targetKg,
@@ -55,5 +65,8 @@ export function goalStatus(info: GoalInfo | null, rows: WeighInRow[], energy: En
     targetKcal,
     balanceKcal,
     offKcal: balanceKcal == null ? null : balanceKcal - targetKcal,
+    intakeKcal: withTdee?.avg_intake_kcal ?? null,
+    tdeeKcal,
+    eatKcal: tdeeKcal == null ? null : tdeeKcal + targetKcal,
   };
 }

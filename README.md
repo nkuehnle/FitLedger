@@ -48,9 +48,13 @@ emulator: `adb shell bmgr transport com.android.localtransport/.LocalTransport`,
 `adb shell bmgr backupnow io.github.njk639.liftbook`, then uninstall and reinstall.
 
 Rest timer on Android: `RestTimerPlugin.kt` in `src-tauri/gen/android/.../liftbook/` shows an
-ongoing notification (rest countdown / workout clock) and sets an exact alarm for the end of each
-rest, so the vibration and alert arrive with the screen off, in another app, or after the app was
-swiped away.
+ongoing notification (rest countdown / workout clock). During each rest `RestChimeService.kt`
+runs as a media-playback foreground service: it buzzes at 3, 2 and 1 s left and plays a chime on
+the media stream (media volume, ducking music) at 0, with the screen off or in another app. It is
+started while the app is in front, because Android mutes audio from a service started in the
+background; an exact alarm 3 s before the end restarts it if it was killed.
+
+Exports and backups on Android save to `Download/Liftbook` (or open the share sheet).
 
 ### Loading data without the UI
 
