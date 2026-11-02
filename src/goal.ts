@@ -35,7 +35,7 @@ export function goalStatus(info: GoalInfo | null, rows: WeighInRow[], energy: En
   if (!scale.length) return null;
   const bw = scale[scale.length - 1].weight_kg;
   const targetKg: [number, number] =
-    info.weekly_rate_kg != null
+    info.weekly_rate_kg != null && info.goal !== "maintain"
       ? [info.weekly_rate_kg, info.weekly_rate_kg]
       : [(bw * info.rate_pct[0]) / 100, (bw * info.rate_pct[1]) / 100];
 

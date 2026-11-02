@@ -65,8 +65,14 @@ export function TodayCard() {
             </span>
           )}
         </a>
-        <a className="today-stat" href="#/body/diet">
-          {s?.eatKcal != null ? (
+        <a className="today-stat" href={goal && !goal.goal ? "#/body/weight" : "#/body/diet"}>
+          {goal && !goal.goal ? (
+            <>
+              <span className="small muted">No goal set</span>
+              <strong className="warn">Set your goal ›</strong>
+              <span className="small muted">cut, maintain or gain</span>
+            </>
+          ) : s?.eatKcal != null ? (
             <>
               <span className="small muted">Eat for goal</span>
               <strong>{kcal(s.eatKcal)} kcal</strong>
@@ -86,13 +92,13 @@ export function TodayCard() {
           ) : (
             <>
               <span className="small muted">Calories</span>
-              <span className="small muted">log calories and weigh-ins</span>
+              <span className="small muted">needs 3+ weeks of weigh-ins</span>
             </>
           )}
         </a>
         <div className="today-stat">
           <span className={`small ${weighDay && !loggedToday ? "warn" : "muted"}`}>
-            {loggedToday ? "Weighed ✓" : weighDay ? "Weigh-in day" : "Weigh-in"}
+            {loggedToday ? "Weighed in today ✓" : weighDay ? "Weigh-in day" : "Weigh-in"}
           </span>
           <div className="row tight">
             <input

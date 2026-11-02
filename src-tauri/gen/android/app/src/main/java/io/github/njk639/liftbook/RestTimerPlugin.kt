@@ -204,11 +204,6 @@ class ReminderArgs {
 }
 
 @InvokeArg
-class OrientationArgs {
-    var landscape: Boolean = false
-}
-
-@InvokeArg
 class DateArgs {
     var date: String = ""
 }
@@ -268,20 +263,6 @@ class RestTimerPlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun weighedIn(invoke: Invoke) {
         WeighInReminder.weighedIn(activity, invoke.parseArgs(DateArgs::class.java).date)
-        invoke.resolve()
-    }
-
-    /** Fullscreen charts: lock to landscape, or back to following the device. */
-    @Command
-    fun orientation(invoke: Invoke) {
-        val landscape = invoke.parseArgs(OrientationArgs::class.java).landscape
-        activity.runOnUiThread {
-            activity.requestedOrientation = if (landscape) {
-                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            } else {
-                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            }
-        }
         invoke.resolve()
     }
 

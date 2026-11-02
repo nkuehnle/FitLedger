@@ -302,6 +302,15 @@ export function groupPrs(prs: PrView[]): [string, PrView[]][] {
   return [...m.entries()];
 }
 
+/** Short PR labels, in display order (like Strong's trophy tags). */
+export const PR_TAG: Record<PrView["kind"], string> = { e1rm: "1RM", weight: "Weight", rep_max: "Reps", reps: "Reps", volume: "Vol" };
+
+/** The distinct short tags for an exercise's PRs, in display order. */
+export function prTags(ps: PrView[]): string[] {
+  const order = Object.keys(PR_TAG);
+  return [...new Set([...ps].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind)).map((p) => PR_TAG[p.kind]))];
+}
+
 export function prText(p: PrView, unit: WeightUnit): string {
   const w = (kg: number) => `${formatWeight(kg, unit)} ${unit}`;
   switch (p.kind) {
@@ -405,10 +414,19 @@ function Detail({ id, summary }: { id: number; summary: boolean }) {
       {w.prs.length > 0 && (
         <section className="card pr-list">
           <div className="section-label">Personal records</div>
+          {/* Exercise + trophy tags; tap a row for the numbers. */}
           {groupPrs(w.prs).map(([name, ps]) => (
-            <div key={name} className="small">
-              🏆 <strong>{name}</strong>: {ps.map((p) => prText(p, unit)).join(" · ")}
-            </div>
+            <details key={name} className="small pr-row">
+              <summary>
+                <strong>{name}</strong>
+                {prTags(ps).map((t) => (
+                  <span key={t} className="pr-tag">
+                    🏆 {t}
+                  </span>
+                ))}
+              </summary>
+              <span className="muted">{ps.map((p) => prText(p, unit)).join(" · ")}</span>
+            </details>
           ))}
         </section>
       )}

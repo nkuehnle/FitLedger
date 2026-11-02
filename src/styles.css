@@ -2164,6 +2164,16 @@ input.num {
   flex-direction: column;
   padding: calc(env(safe-area-inset-top, 0px) + 8px) 12px calc(env(safe-area-inset-bottom, 0px) + 8px);
 }
+/* Phone held upright: lay the overlay on its side (rotated a quarter turn clockwise). */
+.chart-full.sideways {
+  inset: auto;
+  top: 0;
+  left: 100vw;
+  width: 100vh;
+  height: 100vw;
+  transform-origin: top left;
+  transform: rotate(90deg);
+}
 .chart-full-head {
   display: flex;
   flex-wrap: wrap;
@@ -2243,4 +2253,25 @@ label.flagged input {
 }
 label.flagged {
   color: var(--warn);
+}
+
+.pr-row summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  cursor: pointer;
+  list-style: none;
+  padding: 2px 0;
+}
+.pr-row summary::-webkit-details-marker {
+  display: none;
+}
+.pr-tag {
+  font-size: 0.85em;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #eda100 22%, transparent); /* same as .pr-badge, works in dark mode */
+  color: var(--text);
+  white-space: nowrap;
 }

@@ -565,7 +565,6 @@ export const api = {
   getSetting: (key: string) => invoke<string | null>("get_setting", { key }),
   setSetting: (key: string, value: string) => invoke<void>("set_setting", { key, value }),
   /** Android only (no-op elsewhere): weigh-in reminder on weekdays 0 = Sunday … 6 = Saturday. */
-  setOrientation: (landscape: boolean) => invoke<void>("set_orientation", { landscape }).catch(() => {}),
   weighInReminder: (days: number[], hour: number, minute: number) => invoke<void>("weigh_in_reminder", { days, hour, minute }),
 
   perHandSuspects: () => invoke<PerHandSuspect[]>("per_hand_suspects"),

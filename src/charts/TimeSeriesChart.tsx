@@ -1,8 +1,6 @@
 import * as d3 from "d3";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { api } from "../api";
-import { IS_ANDROID } from "../platform";
 import { loess } from "./loess";
 import { useChartTheme, type ChartTheme } from "./theme";
 
@@ -130,38 +128,35 @@ export function TimeSeriesChart(props: TimeSeriesProps) {
   );
 }
 
-/** Chart filling the window. On Android it can flip to landscape (the activity rotates, so the
- *  chart simply gets a wider box); on desktop the window is already wide. */
+/** Chart filling the window. On a phone held upright the overlay is turned sideways, so time runs
+ *  along the long edge whatever the rotation lock says; "Upright" turns it back. */
 function FullscreenChart({ onClose, toolbar, render }: { onClose: () => void; toolbar: ReactNode; render: (height: number) => ReactNode }) {
   const box = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
-  const [landscape, setLandscape] = useState(false);
+  const [sideways, setSideways] = useState(true);
+  const [portrait, setPortrait] = useState(() => window.innerHeight > window.innerWidth);
   useEffect(() => {
     if (!box.current) return;
     const ro = new ResizeObserver((e) => setHeight(Math.floor(e[0].contentRect.height)));
     ro.observe(box.current);
     const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const resize = () => setPortrait(window.innerHeight > window.innerWidth);
     window.addEventListener("keydown", key);
+    window.addEventListener("resize", resize);
     return () => {
       ro.disconnect();
       window.removeEventListener("keydown", key);
-      if (IS_ANDROID) api.setOrientation(false);
+      window.removeEventListener("resize", resize);
     };
   }, [onClose]);
   return createPortal(
-    <div className="chart-full" role="dialog" aria-modal="true">
+    <div className={`chart-full${sideways && portrait ? " sideways" : ""}`} role="dialog" aria-modal="true">
       <div className="chart-full-head">
         {toolbar}
         <div className="chart-full-actions">
-          {IS_ANDROID && (
-            <button
-              className="button small"
-              onClick={() => {
-                api.setOrientation(!landscape);
-                setLandscape(!landscape);
-              }}
-            >
-              {landscape ? "Portrait" : "Landscape"}
+          {portrait && (
+            <button className="button small" onClick={() => setSideways(!sideways)}>
+              {sideways ? "Upright" : "Sideways"}
             </button>
           )}
           <button className="button small" onClick={onClose}>

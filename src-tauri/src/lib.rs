@@ -920,12 +920,6 @@ fn weigh_in_reminder(app: tauri::AppHandle, days: Vec<u8>, hour: u8, minute: u8)
     native_call(&app, "weighInReminder", serde_json::json!({ "days": days, "hour": hour, "minute": minute }))
 }
 
-/// Android: landscape lock for fullscreen charts (false follows the device again).
-#[tauri::command]
-fn set_orientation(app: tauri::AppHandle, landscape: bool) -> CmdResult<()> {
-    native_call(&app, "orientation", serde_json::json!({ "landscape": landscape }))
-}
-
 // ---- Settings ---------------------------------------------------------------------------------------
 
 #[tauri::command]
@@ -1069,7 +1063,7 @@ pub fn run() {
             preview_inbody_csv, import_inbody_csv, diet_days, save_diet_day, energy_balance,
             body_parts, measurements, add_measurement, delete_measurement,
             export_file, backup_to, inspect_backup, restore_from, db_info, save_base64, copy_png,
-            rest_android_status, rest_android_rest, rest_android_clear, weigh_in_reminder, set_orientation,
+            rest_android_status, rest_android_rest, rest_android_clear, weigh_in_reminder,
             share_export, share_backup, share_png, save_png_to_photos, read_inbody_image, stage_backup,
             counts, get_setting, set_setting,
         ])

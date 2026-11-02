@@ -8,7 +8,7 @@ import { TimeSeriesSvg } from "../charts/TimeSeriesChart";
 import { DARK, LIGHT, type ChartTheme } from "../charts/theme";
 import { Modal } from "../components/Modal";
 import { formatDate, formatDuration, formatVolume, formatWeight, parseLocal, toUnit } from "../format";
-import { groupPrs, prText } from "../pages/HistoryPage";
+import { groupPrs, prTags } from "../pages/HistoryPage";
 import { IS_ANDROID } from "../platform";
 
 export type ShareKind =
@@ -33,6 +33,11 @@ export function ShareButton(props: ShareKind) {
 
 const W = 1080;
 const PAD = 72;
+/** Cuts a line to fit the card at `size` px (≈0.55 em per character). */
+const fit = (text: string, size: number) => {
+  const max = Math.floor((W - PAD * 2) / (size * 0.55));
+  return text.length > max ? text.slice(0, max - 1) + "…" : text;
+};
 
 interface CardContent {
   title: string;
@@ -155,6 +160,7 @@ function ShareDialog({ spec, onClose }: { spec: ShareKind; onClose: () => void }
               </>
             )}
           </div>
+          {msg && <p className="small success">{msg}</p>}
           <label>
             Title
             <input value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -182,7 +188,6 @@ function ShareDialog({ spec, onClose }: { spec: ShareKind; onClose: () => void }
           <label className="check">
             <input type="checkbox" checked={hide} onChange={(e) => setHide(e.target.checked)} /> Hide exact numbers
           </label>
-          {msg && <p className="small success">{msg}</p>}
         </div>
       </div>
       {/* Off-screen render target for the visual. */}
@@ -231,10 +236,10 @@ function composeSvg(o: {
   const parts: string[] = [];
   parts.push(`<rect width="${W}" height="${H}" fill="${theme.surface}"/>`);
   parts.push(
-    `<text x="${PAD}" y="${y}" font-size="64" font-weight="700" fill="${theme.text}" font-family="${font}">${esc(o.title)}</text>`,
+    `<text x="${PAD}" y="${y}" font-size="64" font-weight="700" fill="${theme.text}" font-family="${font}">${esc(fit(o.title, 64))}</text>`,
   );
   y += 56;
-  parts.push(`<text x="${PAD}" y="${y}" font-size="34" fill="${theme.muted}" font-family="${font}">${esc(o.subtitle)}</text>`);
+  parts.push(`<text x="${PAD}" y="${y}" font-size="34" fill="${theme.muted}" font-family="${font}">${esc(fit(o.subtitle, 34))}</text>`);
   y += 30;
   if (content.stats.length) {
     const colW = (W - PAD * 2) / content.stats.length;
@@ -254,7 +259,7 @@ function composeSvg(o: {
   content.lines.forEach((l) => {
     y += 44;
     parts.push(
-      `<text x="${PAD}" y="${y}" font-size="30" fill="${theme.text}" font-family="${font}">${esc(o.hide ? l.replace(/[\d.,]+\s*(lb|kg)/g, "•••") : l)}</text>`,
+      `<text x="${PAD}" y="${y}" font-size="30" fill="${theme.text}" font-family="${font}">${esc(fit(o.hide ? l.replace(/[\d.,]+\s*(lb|kg)/g, "•••") : l, 30))}</text>`,
     );
   });
   // Inline the rendered visual(s), stacked.
@@ -304,14 +309,15 @@ async function buildContent(spec: ShareKind, unit: "kg" | "lb"): Promise<CardCon
         title: d.name,
         subtitle: formatDate(d.started_at_local),
         stats: [
-          ...(d.duration_s ? [{ label: "Duration", value: formatDuration(d.duration_s) }] : []),
-          { label: "Volume", value: formatVolume(d.volume_kg, unit) },
+          ...(d.duration_s ? [{ label: "⏱ Time", value: formatDuration(d.duration_s) }] : []),
+          { label: "🏋 Volume", value: formatVolume(d.volume_kg, unit) },
           { label: "Sets", value: String(d.exercises.reduce((n, e) => n + e.sets.length, 0)) },
-          { label: "PRs", value: String(d.prs.length) },
+          { label: "🏆 PRs", value: String(d.prs.length) },
         ],
+        // Like Strong: the exercise, then a small trophy tag per kind of PR (no numbers).
         lines: groupPrs(d.prs)
-          .slice(0, 5)
-          .map(([n, ps]) => `🏆 ${n}: ${ps.map((p) => prText(p, unit)).join(" · ")}`),
+          .slice(0, 6)
+          .map(([n, ps]) => `${n}   ${prTags(ps).map((t) => `🏆 ${t}`).join("  ")}`),
         visual: (theme, _w, h, hide) => (
           <BodyMap values={values} theme={theme} height={h} showLegend={false} muscleNames={names} hideNumbers={hide} />
         ),

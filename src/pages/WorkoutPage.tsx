@@ -31,6 +31,8 @@ export default function WorkoutPage({ id, mode }: { id: number; mode: "live" | "
   }, [reload]);
 
   const timer = useRestTimer(mode === "live" ? w : null);
+  // The set whose completion started the running rest: un-ticking it cancels the rest.
+  const restSet = useRef<number | null>(null);
 
   const run = (f: () => Promise<unknown>) =>
     f()
@@ -146,7 +148,17 @@ export default function WorkoutPage({ id, mode }: { id: number; mode: "live" | "
                 live={mode === "live"}
                 onChanged={reload}
                 onError={setError}
-                onCompleted={(rest) => mode === "live" && rest > 0 && timer.start(rest, nextSetLabel(w, e.id))}
+                onCompleted={(rest, setId, done) => {
+                  if (mode !== "live") return;
+                  if (!done) {
+                    if (restSet.current === setId && timer.endsAt) timer.stop();
+                    return;
+                  }
+                  if (rest > 0) {
+                    restSet.current = setId;
+                    timer.start(rest, nextSetLabel(w, e.id));
+                  }
+                }}
                 onSwap={() => setPicker({ kind: "swap", we: e })}
                 onSuperset={nextOf(e) ? () => run(() => api.reorderExercises(w.id, groupWithNext(w.exercises, e.id))) : undefined}
                 onUnsuperset={e.superset !== null ? () => run(() => api.reorderExercises(w.id, ungroup(w.exercises, e.id))) : undefined}
@@ -286,7 +298,7 @@ function ExerciseBlock({
   live: boolean;
   onChanged: () => void;
   onError: (m: string) => void;
-  onCompleted: (restS: number) => void;
+  onCompleted: (restS: number, setId: number, done: boolean) => void;
   onSwap: () => void;
   onSuperset?: () => void;
   onUnsuperset?: () => void;
@@ -424,7 +436,7 @@ function ExerciseBlock({
                 live={live}
                 onChanged={onChanged}
                 onError={onError}
-                onCompleted={() => onCompleted(e.rest_s ?? 0)}
+                onCompleted={(done) => onCompleted(e.rest_s ?? 0, s.id, done)}
               />
             );
           })}
@@ -506,7 +518,7 @@ function SetRow({
   live: boolean;
   onChanged: () => void;
   onError: (m: string) => void;
-  onCompleted: () => void;
+  onCompleted: (done: boolean) => void;
 }) {
   const { unit } = usePrefs();
   const distUnit = unit === "lb" ? 1609.344 : 1000;
@@ -571,7 +583,11 @@ function SetRow({
       .catch((x) => onError(String(x)));
 
   async function toggle() {
-    if (s.completed) return save({ completed: false });
+    if (s.completed) {
+      await save({ completed: false });
+      if (live) onCompleted(false);
+      return;
+    }
     const v = values(true);
     const missing =
       kind === "distance_duration"
@@ -582,7 +598,7 @@ function SetRow({
     if (missing) return onError("Enter the set first (nothing to copy from last time).");
     await api.updateSet(s.id, { ...v, completed: true }).catch((x) => onError(String(x)));
     onChanged();
-    if (live) onCompleted();
+    if (live) onCompleted(true);
   }
 
   return (

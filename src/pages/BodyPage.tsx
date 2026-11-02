@@ -99,7 +99,8 @@ function GoalPanel() {
             </button>
           ))}
         </div>
-        {goal && (
+        {/* Maintain always aims for no change (within a small band), so it has no target to set. */}
+        {goal && goal !== "maintain" && (
           <label className="small goal-target">
             Target
             <input
@@ -129,7 +130,7 @@ function GoalPanel() {
                   {formatDate(h.start_date)} – {h.end_date ? formatDate(h.end_date) : "now"}
                 </td>
                 <td className="muted">
-                  {h.weekly_rate_kg != null ? `${signed(toUnit(h.weekly_rate_kg, unit), 2)} ${unit}/wk` : "default"}
+                  {h.goal === "maintain" ? "±0" : h.weekly_rate_kg != null ? `${signed(toUnit(h.weekly_rate_kg, unit), 2)} ${unit}/wk` : "default"}
                 </td>
               </tr>
             ))}
@@ -145,17 +146,19 @@ function GoalPanel() {
           </select>
           from
           <input className="input" type="date" value={add.start} onChange={(e) => setAdd({ ...add, start: e.target.value })} />
-          <input
-            className="input small-input"
-            inputMode="decimal"
-            placeholder={`${unit}/wk`}
-            value={add.rate}
-            onChange={(e) => setAdd({ ...add, rate: e.target.value })}
-          />
+          {add.goal !== "maintain" && (
+            <input
+              className="input small-input"
+              inputMode="decimal"
+              placeholder={`${unit}/wk`}
+              value={add.rate}
+              onChange={(e) => setAdd({ ...add, rate: e.target.value })}
+            />
+          )}
           <button
             className="button"
             disabled={!add.start}
-            onClick={() => api.setGoal(add.goal, add.start, parseRate(add.rate, add.goal, unit)).then(changed)}
+            onClick={() => api.setGoal(add.goal, add.start, add.goal === "maintain" ? null : parseRate(add.rate, add.goal, unit)).then(changed)}
           >
             Add
           </button>
