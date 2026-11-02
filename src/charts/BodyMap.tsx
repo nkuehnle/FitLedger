@@ -1,6 +1,6 @@
 import * as d3 from "d3";
-import { useMemo, useState } from "react";
-import { useChartTheme, type ChartTheme } from "./theme";
+import { useMemo, useState, type ReactNode } from "react";
+import { LOAD_RAMP, useChartTheme, type ChartTheme } from "./theme";
 
 // Stylized front/back figures, 200 × 430 each. Regions are polygons keyed by muscle id; "L" shapes
 // are drawn on the figure's left half and mirrored. Shapes are deliberately simple and readable at
@@ -420,7 +420,9 @@ const SILHOUETTE: Pt[][] = [
 ];
 
 const mirror = (pts: Pt[]): Pt[] => pts.map(([x, y]) => [200 - x, y]);
-const toPath = (pts: Pt[]) => `M${pts.map((p) => p.join(",")).join("L")}Z`;
+// Closed Catmull-Rom curves through the polygon corners: rounded, organic outlines.
+const smooth = d3.line().curve(d3.curveCatmullRomClosed.alpha(0.5));
+const toPath = (pts: Pt[]) => smooth(pts) ?? "";
 
 function regionsOf(view: Region[]) {
   return view.flatMap((r) =>
@@ -450,16 +452,34 @@ export interface BodyMapProps {
   legendLabel?: string;
   muscleNames?: Record<string, string>;
   hideNumbers?: boolean;
+  /** Weekly set targets (min, max) per muscle; values must then be sets per week. Colors become
+   *  under / in / over target, and muscles over target get a dashed outline. */
+  targets?: Record<string, [number, number]>;
+  /** Precomputed fill per muscle (overrides values/targets coloring), with its own legend. */
+  fills?: Record<string, string>;
+  legend?: ReactNode;
 }
 
-export function useHeatScale(theme: ChartTheme, max: number) {
-  return useMemo(() => {
-    // theme.sequential runs from "barely" to "most" in both modes (light→dark on light surfaces,
-    // dark→light on dark ones); skip the step closest to the surface so trained muscles stand out.
-    const steps = theme.sequential.slice(2);
-    const interp = d3.interpolateRgbBasis(steps);
-    return (v: number) => (v <= 0 ? null : interp(Math.min(1, v / (max || 1))));
-  }, [theme, max]);
+const loadInterp = d3
+  .scaleLinear<string>()
+  .domain(LOAD_RAMP.map((r) => r[0]))
+  .range(LOAD_RAMP.map((r) => r[1]))
+  .interpolate(d3.interpolateLab)
+  .clamp(true);
+
+/** Where a weekly set count sits against its target: 0–0.5 under the minimum, 0.5–0.8 inside the
+ *  range, 0.8–1 above the maximum (1 = half again over it). */
+export function loadPosition(v: number, [lo, hi]: [number, number]): number {
+  if (v <= 0) return 0;
+  if (v < lo) return 0.5 * (v / lo);
+  if (v <= hi) return 0.5 + 0.3 * (hi > lo ? (v - lo) / (hi - lo) : 1);
+  return 0.8 + 0.2 * Math.min(1, (v - hi) / (0.5 * hi || 1));
+}
+export const loadColor = (t: number) => loadInterp(t);
+
+/** Plain magnitude (no targets): white → deep red, stopping short of the "too much" black. */
+export function useHeatScale(_theme: ChartTheme, max: number) {
+  return useMemo(() => (v: number) => (v <= 0 ? null : loadInterp(0.03 + 0.77 * Math.min(1, v / (max || 1)))), [max]);
 }
 
 /** Color ramp legend for body maps (also used alone under side-by-side maps). */
@@ -482,10 +502,25 @@ export function HeatLegend({
       <span>0</span>
       <span
         className="heat-ramp"
-        style={{ background: `linear-gradient(to right, ${[0.05, 0.25, 0.5, 0.75, 1].map((f) => color(f * (max || 1))).join(",")})` }}
+        style={{ background: `linear-gradient(to right, ${[0.02, 0.25, 0.5, 0.75, 1].map((f) => color(f * (max || 1))).join(",")})` }}
       />
       <span>{hideNumbers ? "most" : `${Math.round(max * 10) / 10}`}</span>
       {label && <span>{label}</span>}
+    </div>
+  );
+}
+
+/** Legend for the target-relative scale (segments match loadPosition: 50% / 30% / 20%). */
+export function LoadLegend() {
+  const stops = [0.02, 0.25, 0.5, 0.65, 0.8, 0.9, 1].map((t) => `${loadColor(t)} ${t * 100}%`).join(",");
+  return (
+    <div className="load-legend small muted">
+      <span className="load-ramp" style={{ background: `linear-gradient(to right, ${stops})` }} />
+      <div className="load-labels">
+        <span>under target</span>
+        <span>in target</span>
+        <span>over</span>
+      </div>
     </div>
   );
 }
@@ -502,18 +537,31 @@ export function BodyMap(props: BodyMapProps) {
 
   const figure = (paths: typeof FRONT_PATHS, label: string, dx: number) => (
     <g transform={`translate(${dx},0)`}>
+      {/* One continuous body: every part drawn fat in the base color, then the parts on top. */}
+      <g fill={base} stroke={base} strokeWidth={7} strokeLinejoin="round">
+        {SILHOUETTE.map((p, i) => (
+          <path key={i} d={toPath(p)} />
+        ))}
+        {paths.map((r, i) => (
+          <path key={i} d={r.d} />
+        ))}
+      </g>
       {SILHOUETTE.map((p, i) => (
         <path key={i} d={toPath(p)} fill={base} />
       ))}
       {paths.map((r, i) => {
         const v = props.values[r.muscle] ?? 0;
+        const t = props.targets?.[r.muscle];
+        const fill = props.fills ? (props.fills[r.muscle] ?? null) : t ? (v > 0 ? loadColor(loadPosition(v, t)) : null) : color(v);
+        const over = !!t && v > t[1];
         return (
           <path
             key={i}
             d={r.d}
-            fill={color(v) ?? base}
-            stroke={active === r.muscle ? theme.text : theme.surface}
+            fill={fill ?? base}
+            stroke={active === r.muscle || over ? theme.text : theme.surface}
             strokeWidth={active === r.muscle ? 2 : 1.5}
+            strokeDasharray={over && active !== r.muscle ? "3 2" : undefined}
             strokeLinejoin="round"
             style={{ cursor: props.onSelect ? "pointer" : undefined }}
             onPointerEnter={() => setHover(r.muscle)}
@@ -541,11 +589,18 @@ export function BodyMap(props: BodyMapProps) {
         {figure(FRONT_PATHS, "Front", 0)}
         {figure(BACK_PATHS, "Back", 210)}
       </svg>
-      {props.showLegend !== false && <HeatLegend max={max} theme={theme} label={props.legendLabel} hideNumbers={props.hideNumbers} />}
+      {props.showLegend !== false &&
+        (props.legend ??
+          (props.targets ? (
+            <LoadLegend />
+          ) : (
+            <HeatLegend max={max} theme={theme} label={props.legendLabel} hideNumbers={props.hideNumbers} />
+          )))}
       {hover && props.muscleNames && (
         <div className="small" style={{ textAlign: "center", minHeight: "1.4em" }}>
           {props.muscleNames[hover]}
           {!props.hideNumbers && `: ${Math.round((props.values[hover] ?? 0) * 10) / 10}`}
+          {!props.hideNumbers && props.targets?.[hover] && ` / week (target ${props.targets[hover][0]}–${props.targets[hover][1]})`}
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@ pub mod body;
 pub mod db;
 pub mod exercises;
 pub mod export;
+pub mod health;
 pub mod history;
 pub mod library;
 pub mod live;

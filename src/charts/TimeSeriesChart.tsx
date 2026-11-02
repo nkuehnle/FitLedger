@@ -1,5 +1,8 @@
 import * as d3 from "d3";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { api } from "../api";
+import { IS_ANDROID } from "../platform";
 import { loess } from "./loess";
 import { useChartTheme, type ChartTheme } from "./theme";
 
@@ -63,41 +66,114 @@ export function TimeSeriesChart(props: TimeSeriesProps) {
   const [smoothOn, setSmoothOn] = useState(false);
   const [span, setSpan] = useState(0.3);
   const [showBands, setShowBands] = useState(true);
+  const [full, setFull] = useState(false);
   const smooth = props.smooth ?? { on: smoothOn, span };
   const controls = props.showControls ?? !props.smooth;
   const hasLine = props.series.some((s) => s.style !== "points" && s.points.length > 2);
+  const hasData = props.series.some((s) => s.points.length > 0);
+
+  const toolbar = (inFull: boolean) => (
+    <div className="chart-controls">
+      {controls && hasLine && (
+        <div className="segmented small">
+          <button className={!smooth.on ? "active" : ""} onClick={() => setSmoothOn(false)}>
+            Raw
+          </button>
+          <button className={smooth.on ? "active" : ""} onClick={() => setSmoothOn(true)}>
+            Trend
+          </button>
+        </div>
+      )}
+      {controls && smooth.on && hasLine && (
+        <label className="span-slider small muted">
+          Smoothing
+          <input type="range" min={0.05} max={1} step={0.05} value={span} onChange={(e) => setSpan(Number(e.target.value))} />
+        </label>
+      )}
+      {controls && (props.bands?.length ?? 0) > 0 && (
+        <label className="check small muted">
+          <input type="checkbox" checked={showBands} onChange={(e) => setShowBands(e.target.checked)} />
+          Phases
+        </label>
+      )}
+      {hasData && !inFull && (
+        <button className="icon-btn chart-expand" title="Full screen" aria-label="Full screen" onClick={() => setFull(true)}>
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+  const body = (height?: number) => (
+    <>
+      {props.series.length > 1 && <Legend series={props.series} theme={props.theme} />}
+      <TimeSeriesSvg {...props} height={height ?? props.height} smooth={smooth} bands={showBands ? props.bands : undefined} />
+    </>
+  );
 
   return (
     <div className="chart">
-      {controls && (hasLine || (props.bands?.length ?? 0) > 0) && (
-        <div className="chart-controls">
-          {hasLine && (
-            <div className="segmented small">
-              <button className={!smooth.on ? "active" : ""} onClick={() => setSmoothOn(false)}>
-                Raw
-              </button>
-              <button className={smooth.on ? "active" : ""} onClick={() => setSmoothOn(true)}>
-                Trend
-              </button>
-            </div>
-          )}
-          {smooth.on && hasLine && (
-            <label className="span-slider small muted">
-              Smoothing
-              <input type="range" min={0.05} max={1} step={0.05} value={span} onChange={(e) => setSpan(Number(e.target.value))} />
-            </label>
-          )}
-          {(props.bands?.length ?? 0) > 0 && (
-            <label className="check small muted">
-              <input type="checkbox" checked={showBands} onChange={(e) => setShowBands(e.target.checked)} />
-              Phases
-            </label>
-          )}
-        </div>
-      )}
-      {props.series.length > 1 && <Legend series={props.series} theme={props.theme} />}
-      <TimeSeriesSvg {...props} smooth={smooth} bands={showBands ? props.bands : undefined} />
+      {toolbar(false)}
+      {body()}
+      {full && <FullscreenChart onClose={() => setFull(false)} toolbar={toolbar(true)} render={body} />}
     </div>
+  );
+}
+
+/** Chart filling the window. On Android it can flip to landscape (the activity rotates, so the
+ *  chart simply gets a wider box); on desktop the window is already wide. */
+function FullscreenChart({ onClose, toolbar, render }: { onClose: () => void; toolbar: ReactNode; render: (height: number) => ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState(0);
+  const [landscape, setLandscape] = useState(false);
+  useEffect(() => {
+    if (!box.current) return;
+    const ro = new ResizeObserver((e) => setHeight(Math.floor(e[0].contentRect.height)));
+    ro.observe(box.current);
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", key);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("keydown", key);
+      if (IS_ANDROID) api.setOrientation(false);
+    };
+  }, [onClose]);
+  return createPortal(
+    <div className="chart-full" role="dialog" aria-modal="true">
+      <div className="chart-full-head">
+        {toolbar}
+        <div className="chart-full-actions">
+          {IS_ANDROID && (
+            <button
+              className="button small"
+              onClick={() => {
+                api.setOrientation(!landscape);
+                setLandscape(!landscape);
+              }}
+            >
+              {landscape ? "Portrait" : "Landscape"}
+            </button>
+          )}
+          <button className="button small" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+      <div className="chart-full-body" ref={box}>
+        {height > 0 && render(Math.max(160, height - 40))}
+      </div>
+    </div>,
+    document.body,
   );
 }
 

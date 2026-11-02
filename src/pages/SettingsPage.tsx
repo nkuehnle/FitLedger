@@ -1,6 +1,61 @@
 import { useEffect, useState } from "react";
 import { usePrefs, type Theme } from "../App";
 import { api, type WeightUnit } from "../api";
+import { IS_ANDROID } from "../platform";
+import { loadWeighInPlan, saveWeighInPlan, type WeighInPlan } from "../weighIn";
+
+const WEEK: [number, string][] = [
+  [1, "Mon"],
+  [2, "Tue"],
+  [3, "Wed"],
+  [4, "Thu"],
+  [5, "Fri"],
+  [6, "Sat"],
+  [0, "Sun"],
+];
+
+/** Weigh-in days and the morning reminder for them. */
+function WeighInDays() {
+  const [plan, setPlan] = useState<WeighInPlan | null>(null);
+  useEffect(() => {
+    loadWeighInPlan().then(setPlan);
+  }, []);
+  if (!plan) return null;
+  const save = (p: WeighInPlan) => {
+    setPlan(p);
+    saveWeighInPlan(p);
+  };
+  return (
+    <section className="card">
+      <h2 className="section-title">Weigh-in days</h2>
+      <div className="segmented week-picker">
+        {WEEK.map(([d, l]) => (
+          <button
+            key={d}
+            className={plan.days.includes(d) ? "active" : ""}
+            onClick={() => save({ ...plan, days: plan.days.includes(d) ? plan.days.filter((x) => x !== d) : [...plan.days, d].sort() })}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+      <label className="row small">
+        Remind me at
+        <input
+          className="input"
+          type="time"
+          value={plan.time}
+          onChange={(e) => e.target.value && save({ ...plan, time: e.target.value })}
+        />
+      </label>
+      <p className="muted small">
+        {IS_ANDROID
+          ? "A notification reminds you on these mornings, unless you've already logged a weight that day."
+          : "The Workouts tab reminds you on these days. On Android you also get a notification."}
+      </p>
+    </section>
+  );
+}
 
 export default function SettingsPage() {
   const { unit, setUnit, theme, setTheme } = usePrefs();
@@ -45,6 +100,7 @@ export default function SettingsPage() {
           </a>
         </div>
       </section>
+      <WeighInDays />
       <section className="card">
         <h2 className="section-title">Weight unit</h2>
         {seg<WeightUnit>(

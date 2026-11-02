@@ -29,6 +29,14 @@ export interface WorkoutImportResult {
   needs_review: number;
 }
 
+export interface MeasurementPreview {
+  entries: number;
+  parts: string[];
+  first: string | null;
+  last: string | null;
+  warnings: string[];
+}
+
 export interface BodyweightPreview {
   entries: number;
   first: string | null;
@@ -487,6 +495,13 @@ export interface EnergyPoint {
 
 export type Goal = "cut" | "maintain" | "gain";
 
+export interface MuscleHealth {
+  muscle_id: string;
+  /** -1 (going badly) … 1 (going well); null without data. */
+  score: number | null;
+  signals: { kind: "volume" | "strength" | "size" | "lean_mass"; score: number; detail: string }[];
+}
+
 function localToday(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -523,6 +538,8 @@ export const api = {
   previewBodyweight: (text: string, weightUnit?: WeightUnit) => invoke<BodyweightPreview>("preview_bodyweight", { text, weightUnit }),
   importBodyweight: (text: string, fileName: string, weightUnit?: WeightUnit) =>
     invoke<ImportOutcome>("import_bodyweight", { text, fileName, weightUnit }),
+  previewMeasurements: (text: string) => invoke<MeasurementPreview>("preview_measurements", { text }),
+  importMeasurements: (text: string, fileName: string) => invoke<ImportOutcome>("import_measurements", { text, fileName }),
   nameReview: () => invoke<NameReview[]>("name_review"),
   setNameMapping: (sourceName: string, slug: string, fromDate?: string, toDate?: string) =>
     invoke<void>("set_name_mapping", { sourceName, slug, fromDate, toDate }),
@@ -535,6 +552,9 @@ export const api = {
   counts: () => invoke<Counts>("counts"),
   getSetting: (key: string) => invoke<string | null>("get_setting", { key }),
   setSetting: (key: string, value: string) => invoke<void>("set_setting", { key, value }),
+  /** Android only (no-op elsewhere): weigh-in reminder on weekdays 0 = Sunday … 6 = Saturday. */
+  setOrientation: (landscape: boolean) => invoke<void>("set_orientation", { landscape }).catch(() => {}),
+  weighInReminder: (days: number[], hour: number, minute: number) => invoke<void>("weigh_in_reminder", { days, hour, minute }),
 
   perHandSuspects: () => invoke<PerHandSuspect[]>("per_hand_suspects"),
   setSessionLoadMode: (workoutExerciseId: number, mode: "total" | "per_hand" | null) =>
@@ -588,8 +608,18 @@ export const api = {
   suggestion: (today: string) => invoke<Suggestion | null>("suggestion", { today }),
   projectedWeeklySets: (edited?: Template) => invoke<[string, number][]>("projected_weekly_sets", { edited }),
   muscleTargets: () => invoke<MuscleTarget[]>("muscle_targets", { today: localToday() }),
-  currentGoal: () => invoke<{ goal: Goal | null; rate_pct: [number, number] | null }>("current_goal", { today: localToday() }),
-  setGoal: (goal: Goal) => invoke<void>("set_goal", { goal, today: localToday() }),
+  currentGoal: () =>
+    invoke<{ goal: Goal | null; rate_pct: [number, number] | null; weekly_rate_kg: number | null; start_date: string | null }>(
+      "current_goal",
+      {
+        today: localToday(),
+      },
+    ),
+  progressHealth: () => invoke<MuscleHealth[]>("progress_health", { today: localToday() }),
+  goalHistory: () =>
+    invoke<{ phase_id: number; goal: Goal; start_date: string; end_date: string | null; weekly_rate_kg: number | null }[]>("goal_history"),
+  setGoal: (goal: Goal, start?: string, weeklyRateKg?: number | null) =>
+    invoke<void>("set_goal", { goal, start: start ?? localToday(), weeklyRateKg: weeklyRateKg ?? null }),
   setMuscleTarget: (muscleId: string, minSets: number, maxSets: number) =>
     invoke<void>("set_muscle_target", { muscleId, minSets, maxSets }),
   listPhases: () => invoke<Phase[]>("list_phases"),
@@ -621,7 +651,8 @@ export const api = {
   addMeasurement: (at: string, part: string, value: number) => invoke<number>("add_measurement", { at, part, value }),
   deleteMeasurement: (id: number) => invoke<void>("delete_measurement", { id }),
 
-  exportFile: (kind: "strong" | "bodyweight" | "inbody" | "diet" | "measurements" | "json", path: string) => invoke<void>("export_file", { kind, path }),
+  exportFile: (kind: "strong" | "bodyweight" | "inbody" | "diet" | "measurements" | "json", path: string) =>
+    invoke<void>("export_file", { kind, path }),
   backupTo: (path: string) => invoke<BackupInfo>("backup_to", { path }),
   inspectBackup: (path: string) => invoke<BackupInfo>("inspect_backup", { path }),
   restoreFrom: (path: string) => invoke<BackupInfo>("restore_from", { path }),
@@ -631,5 +662,6 @@ export const api = {
   shareExport: (kind: "strong" | "bodyweight" | "inbody" | "diet" | "measurements" | "json") => invoke<void>("share_export", { kind }),
   shareBackup: () => invoke<BackupInfo>("share_backup"),
   sharePng: (name: string, data: string) => invoke<void>("share_png", { name, data }),
+  savePngToPhotos: (name: string, data: string) => invoke<void>("save_png_to_photos", { name, data }),
   stageBackup: (data: string) => invoke<{ path: string; info: BackupInfo }>("stage_backup", { data }),
 };

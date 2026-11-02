@@ -6,7 +6,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
 
 use crate::Result;
-use crate::strong::{BodyweightImport, StrongImport};
+use crate::strong::{BodyweightImport, MeasurementImport, StrongImport};
 
 const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 
@@ -291,6 +291,9 @@ CREATE TABLE body_measurement (
     value             REAL NOT NULL
 );
 CREATE INDEX body_measurement_part ON body_measurement (part, measured_at_local);
+"#, r#"
+-- Migration 5: optional weekly bodyweight-change target on a goal (nutrition phase), kg/week.
+ALTER TABLE phase ADD COLUMN weekly_rate_kg REAL;
 "#];
 
 pub(crate) const MIGRATION_COUNT: usize = MIGRATIONS.len();
@@ -460,6 +463,28 @@ impl Db {
             }
         }
         record_batch(&tx, "bodyweight", file_name, import.row_count, out)?;
+        tx.commit()?;
+        Ok(out)
+    }
+
+    /// Adds tape measurements, skipping ones already logged (same time and part).
+    pub fn import_measurements(&mut self, import: &MeasurementImport, file_name: &str) -> Result<ImportOutcome> {
+        let tx = self.conn.transaction()?;
+        let mut out = ImportOutcome { inserted: 0, skipped: 0, inserted_sets: 0 };
+        {
+            let mut exists = tx.prepare("SELECT 1 FROM body_measurement WHERE measured_at_local = ?1 AND part = ?2")?;
+            let mut ins = tx.prepare("INSERT INTO body_measurement (measured_at_local, part, value) VALUES (?1, ?2, ?3)")?;
+            for e in &import.entries {
+                let at = e.measured_at_local.format(TIME_FMT).to_string();
+                if exists.exists(params![at, e.part])? {
+                    out.skipped += 1;
+                } else {
+                    ins.execute(params![at, e.part, e.value])?;
+                    out.inserted += 1;
+                }
+            }
+        }
+        record_batch(&tx, "measurements", file_name, import.row_count, out)?;
         tx.commit()?;
         Ok(out)
     }

@@ -17,6 +17,7 @@ import { isoDate } from "../charts/RangePicker";
 import { templateColor, useChartTheme, type ChartTheme } from "../charts/theme";
 import { ShareButton } from "../share/ShareDialog";
 import { StartPanel } from "../components/StartPanel";
+import { TodayCard } from "../components/TodayCard";
 import {
   EQUIPMENT_LABELS,
   formatClock,
@@ -53,6 +54,7 @@ export default function HistoryPage({ selectedId, view }: { selectedId: number |
             ))}
           </div>
         </div>
+        <TodayCard />
         <StartPanel />
         {mode === "feed" ? <Feed selectedId={selectedId} /> : <CalendarView selectedId={selectedId} />}
       </section>

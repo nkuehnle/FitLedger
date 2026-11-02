@@ -11,7 +11,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
-import android.media.RingtoneManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -31,7 +30,11 @@ import app.tauri.plugin.Plugin
  */
 object RestNotifications {
     const val CHANNEL_STATUS = "workout_status"
-    const val CHANNEL_ALERT = "rest_over"
+    // v3: the channel plays the app's own beep on the alarm stream, so it follows alarm volume and
+    // sounds with the ringer on vibrate. The system plays it, so newer Android versions don't mute
+    // it as background audio. Channels can't be changed once created, hence the new id.
+    const val CHANNEL_ALERT = "rest_over_v3"
+    private val OLD_CHANNELS = listOf("rest_over", "rest_over_v2")
     const val ID_STATUS = 1001
     const val ID_ALERT = 1002
     const val ACTION_REST_OVER = "io.github.njk639.liftbook.REST_OVER"
@@ -40,6 +43,7 @@ object RestNotifications {
     fun ensureChannels(ctx: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = ctx.getSystemService(NotificationManager::class.java)
+        OLD_CHANNELS.forEach { nm.deleteNotificationChannel(it) }
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_STATUS, "Workout in progress", NotificationManager.IMPORTANCE_LOW).apply {
                 description = "Rest countdown and workout clock while you train"
@@ -52,8 +56,11 @@ object RestNotifications {
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 200, 120, 200)
                 setSound(
-                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
-                    AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build(),
+                    android.net.Uri.parse("android.resource://${ctx.packageName}/${R.raw.rest_beep}"),
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build(),
                 )
             },
         )
@@ -91,8 +98,8 @@ object RestNotifications {
         NotificationManagerCompat.from(ctx).notify(ID_STATUS, n)
     }
 
-    // The "Rest over" channel carries the vibration (200 ms, pause, 200 ms) and sound; a direct
-    // Vibrator call would be ignored when the app is in the background.
+    // The "Rest over" channel carries the vibration (200 ms, pause, 200 ms) and the beep; a direct
+    // Vibrator or MediaPlayer call can be ignored or muted when the app is in the background.
     fun alertRestOver(ctx: Context, text: String) {
         ensureChannels(ctx)
         if (!canPost(ctx)) return
@@ -176,10 +183,28 @@ class RestArgs {
     var next: String = "Time for your next set"
 }
 
+@InvokeArg
+class ReminderArgs {
+    var days: IntArray = IntArray(0)
+    var hour: Int = 9
+    var minute: Int = 0
+}
+
+@InvokeArg
+class OrientationArgs {
+    var landscape: Boolean = false
+}
+
+@InvokeArg
+class DateArgs {
+    var date: String = ""
+}
+
 @TauriPlugin
 class RestTimerPlugin(private val activity: Activity) : Plugin(activity) {
     override fun load(webView: android.webkit.WebView) {
         RestNotifications.ensureChannels(activity)
+        WeighInReminder.schedule(activity)
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
@@ -216,6 +241,58 @@ class RestTimerPlugin(private val activity: Activity) : Plugin(activity) {
             .putExtra(Intent.EXTRA_STREAM, uri)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         activity.startActivity(Intent.createChooser(send, a.title))
+        invoke.resolve()
+    }
+
+    /** Weigh-in reminder days (0 = Sunday) and time; no days turns it off. */
+    @Command
+    fun weighInReminder(invoke: Invoke) {
+        val a = invoke.parseArgs(ReminderArgs::class.java)
+        WeighInReminder.configure(activity, a.days.toList(), a.hour, a.minute)
+        invoke.resolve()
+    }
+
+    @Command
+    fun weighedIn(invoke: Invoke) {
+        WeighInReminder.weighedIn(activity, invoke.parseArgs(DateArgs::class.java).date)
+        invoke.resolve()
+    }
+
+    /** Fullscreen charts: lock to landscape, or back to following the device. */
+    @Command
+    fun orientation(invoke: Invoke) {
+        val landscape = invoke.parseArgs(OrientationArgs::class.java).landscape
+        activity.runOnUiThread {
+            activity.requestedOrientation = if (landscape) {
+                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            } else {
+                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
+        }
+        invoke.resolve()
+    }
+
+    /** Copies an image from the app's cache into the gallery (Pictures/Liftbook). */
+    @Command
+    fun saveImage(invoke: Invoke) {
+        val a = invoke.parseArgs(ShareArgs::class.java)
+        val file = java.io.File(a.path)
+        if (Build.VERSION.SDK_INT < 29) {
+            invoke.reject("Saving to Photos needs Android 10 or newer; use Share instead")
+            return
+        }
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, file.name)
+            put(android.provider.MediaStore.Images.Media.MIME_TYPE, a.mime)
+            put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Liftbook")
+        }
+        val resolver = activity.contentResolver
+        val uri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+        if (uri == null) {
+            invoke.reject("Couldn't save the image")
+            return
+        }
+        resolver.openOutputStream(uri)!!.use { out -> file.inputStream().use { it.copyTo(out) } }
         invoke.resolve()
     }
 

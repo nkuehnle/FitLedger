@@ -78,3 +78,10 @@ export const EQUIPMENT_LABELS: Record<string, string> = {
   stability_ball: "Stability ball",
   other: "Other",
 };
+
+/** Now as "YYYY-MM-DD HH:MM:00" local time (the format weigh-ins are stored in). */
+export function nowLocal(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:00`;
+}

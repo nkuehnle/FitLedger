@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { api, MISSING_WEIGHT_UNIT, type BodyweightPreview, type Counts, type WeightUnit, type WorkoutPreview } from "../api";
+import {
+  api,
+  MISSING_WEIGHT_UNIT,
+  type BodyweightPreview,
+  type MeasurementPreview,
+  type Counts,
+  type WeightUnit,
+  type WorkoutPreview,
+} from "../api";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { type BackupInfo } from "../api";
 import { formatDate } from "../format";
@@ -9,12 +17,14 @@ import { today } from "../charts/RangePicker";
 type Pending =
   | { kind: "workouts"; fileName: string; text: string; unit?: WeightUnit; preview: WorkoutPreview }
   | { kind: "bodyweight"; fileName: string; text: string; unit?: WeightUnit; preview: BodyweightPreview }
+  | { kind: "measurements"; fileName: string; text: string; preview: MeasurementPreview }
   | { kind: "needs-unit"; fileName: string; text: string; target: "workouts" | "bodyweight" };
 
-/** Strong workout exports have an Exercise column; bodyweight exports don't. */
-function detectKind(text: string): "workouts" | "bodyweight" {
+/** Strong workout exports have an Exercise column, bodyweight exports a Weight column; anything
+ *  else (e.g. "Date,Neck (in.)") is a body measurement export. */
+function detectKind(text: string): "workouts" | "bodyweight" | "measurements" {
   const header = text.split(/\r?\n/, 1)[0].toLowerCase();
-  return header.includes("exercise") ? "workouts" : "bodyweight";
+  return header.includes("exercise") ? "workouts" : header.includes("weight") ? "bodyweight" : "measurements";
 }
 
 export default function DataPage() {
@@ -31,17 +41,19 @@ export default function DataPage() {
   };
   useEffect(refresh, []);
 
-  async function preview(fileName: string, text: string, kind: "workouts" | "bodyweight", unit?: WeightUnit) {
+  async function preview(fileName: string, text: string, kind: "workouts" | "bodyweight" | "measurements", unit?: WeightUnit) {
     setError(null);
     setMessage(null);
     try {
-      if (kind === "workouts") {
+      if (kind === "measurements") {
+        setPending({ kind, fileName, text, preview: await api.previewMeasurements(text) });
+      } else if (kind === "workouts") {
         setPending({ kind, fileName, text, unit, preview: await api.previewStrongWorkouts(text, unit) });
       } else {
         setPending({ kind, fileName, text, unit, preview: await api.previewBodyweight(text, unit) });
       }
     } catch (e) {
-      if (e === MISSING_WEIGHT_UNIT) setPending({ kind: "needs-unit", fileName, text, target: kind });
+      if (e === MISSING_WEIGHT_UNIT && kind !== "measurements") setPending({ kind: "needs-unit", fileName, text, target: kind });
       else setError(String(e));
     }
   }
@@ -63,6 +75,9 @@ export default function DataPage() {
             (r.outcome.skipped ? `, skipped ${r.outcome.skipped} already imported` : "") +
             `. ${r.auto_mapped} exercise names matched automatically.`,
         );
+      } else if (pending.kind === "measurements") {
+        const r = await api.importMeasurements(pending.text, pending.fileName);
+        setMessage(`Imported ${r.inserted} measurements` + (r.skipped ? `, skipped ${r.skipped} already imported` : "") + ".");
       } else {
         const r = await api.importBodyweight(pending.text, pending.fileName, pending.unit);
         setMessage(`Imported ${r.inserted} weigh-ins` + (r.skipped ? `, skipped ${r.skipped} already imported` : "") + ".");
@@ -102,8 +117,8 @@ export default function DataPage() {
       <section className="card">
         <h2 className="section-title">Strong export</h2>
         <p className="muted small">
-          In Strong: Settings → Export data. Choose the workouts CSV or the bodyweight CSV; Liftbook tells them apart. Importing the same
-          file again won't create duplicates.
+          In Strong: Settings → Export data. Choose the workouts, bodyweight or a body measurement CSV (e.g. neck); Liftbook tells them
+          apart. Importing the same file again won't create duplicates.
         </p>
         <label className="button primary file-button">
           Choose CSV file
@@ -160,6 +175,17 @@ export default function DataPage() {
               </dd>
               <dt>Weight unit</dt>
               <dd>{pending.preview.weight_unit ?? "per row"}</dd>
+            </dl>
+          ) : pending.kind === "measurements" ? (
+            <dl className="facts">
+              <dt>Measurements</dt>
+              <dd>{pending.preview.entries}</dd>
+              <dt>Body parts</dt>
+              <dd>{pending.preview.parts.map((p) => p.replace(/_/g, " ")).join(", ")}</dd>
+              <dt>Dates</dt>
+              <dd>
+                {pending.preview.first && formatDate(pending.preview.first)} – {pending.preview.last && formatDate(pending.preview.last)}
+              </dd>
             </dl>
           ) : (
             <dl className="facts">

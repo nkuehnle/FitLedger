@@ -476,6 +476,86 @@ pub fn parse_bodyweight(text: &str, opts: ImportOptions) -> Result<BodyweightImp
     Ok(BodyweightImport { entries, weight_unit: unit, row_count, warnings })
 }
 
+// ---------------------------------------------------------------------------------------------
+// Body measurements ("Date,Neck (in.)", one column per part; Strong exports each part separately)
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MeasurementEntry {
+    pub measured_at_local: NaiveDateTime,
+    /// A `body::BODY_PARTS` id.
+    pub part: String,
+    /// cm for lengths, % for body fat.
+    pub value: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MeasurementImport {
+    pub entries: Vec<MeasurementEntry>,
+    pub parts: Vec<String>,
+    pub row_count: usize,
+    pub warnings: Vec<String>,
+}
+
+/// Maps a column header like "Neck (in.)" or "Body Fat Percentage (%)" to a body part and the
+/// factor that converts its values to cm (lengths) or % (body fat).
+fn measurement_column(h: &str) -> Option<(&'static str, f64)> {
+    let (base, unit) = split_header(h);
+    let id = base.replace("percentage", "").trim().replace(' ', "_");
+    let id = if id == "body_fat" { "body_fat_pct".to_string() } else { id };
+    let (part, _, kind) = crate::body::BODY_PARTS.iter().find(|p| p.0 == id)?;
+    let unit = unit.unwrap_or_default().to_ascii_lowercase();
+    let factor = match (*kind, unit.trim_end_matches('.')) {
+        ("pct", _) => 1.0,
+        (_, "in" | "inch" | "inches") => 2.54,
+        (_, "cm" | "") => 1.0,
+        (_, "mm") => 0.1,
+        _ => return None,
+    };
+    Some((part, factor))
+}
+
+pub fn parse_measurements(text: &str) -> Result<MeasurementImport> {
+    let mut rdr = reader(text);
+    let headers = rdr.headers()?.clone();
+    let mut date_col = None;
+    let mut cols = Vec::new();
+    for (i, h) in headers.iter().enumerate() {
+        if split_header(h).0 == "date" {
+            date_col = Some(i);
+        } else if let Some((part, factor)) = measurement_column(h) {
+            cols.push((i, part, factor));
+        }
+    }
+    let Some(date_col) = date_col else {
+        return Err(Error::Format("expected a \"Date\" column".into()));
+    };
+    if cols.is_empty() {
+        return Err(Error::Format("no body measurement columns (e.g. \"Neck (in.)\") found".into()));
+    }
+    let mut entries = Vec::new();
+    let mut warnings = Vec::new();
+    let mut row_count = 0;
+    for (row_no, rec) in rdr.records().enumerate() {
+        let rec = rec?;
+        row_count += 1;
+        let Some(t) = parse_datetime(field(&rec, Some(date_col))) else {
+            warnings.push(format!("row {}: couldn't read the date, skipped", row_no + 2));
+            continue;
+        };
+        for &(col, part, factor) in &cols {
+            let raw = field(&rec, Some(col));
+            match num(raw) {
+                Some(v) if v > 0.0 => entries.push(MeasurementEntry { measured_at_local: t, part: part.into(), value: v * factor }),
+                None if raw.trim().is_empty() => {}
+                _ => warnings.push(format!("row {}: couldn't read {raw:?}, skipped", row_no + 2)),
+            }
+        }
+    }
+    entries.sort_by_key(|e| e.measured_at_local);
+    let parts = cols.iter().map(|c| c.1.to_string()).collect();
+    Ok(MeasurementImport { entries, parts, row_count, warnings })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -511,6 +591,19 @@ mod tests {
     #[test]
     fn headers() {
         assert_eq!(split_header("Weight (lb)"), ("weight".into(), Some("lb".into())));
+    }
+
+    #[test]
+    fn measurements() {
+        let m = parse_measurements("Date,Neck (in.)\r\n2026-03-01 08:00:00,15.0\r\n2026-01-01 09:30:00,14.5\r\n").unwrap();
+        assert_eq!(m.parts, vec!["neck"]);
+        assert_eq!(m.entries.len(), 2);
+        assert_eq!(m.entries[0].measured_at_local.to_string(), "2026-01-01 09:30:00");
+        assert!((m.entries[0].value - 14.5 * 2.54).abs() < 1e-9);
+        let m = parse_measurements("Date,Body Fat Percentage (%),Left Bicep (cm)\n2026-01-01 08:00:00,15.2,\n").unwrap();
+        assert_eq!(m.entries.len(), 1);
+        assert_eq!((m.entries[0].part.as_str(), m.entries[0].value), ("body_fat_pct", 15.2));
+        assert!(parse_measurements("Date,Mood (1-5)\n2026-01-01 08:00:00,3\n").is_err());
         assert_eq!(split_header("\u{feff}Date"), ("date".into(), None));
     }
 }

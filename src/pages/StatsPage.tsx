@@ -15,7 +15,9 @@ import {
 } from "../api";
 import { navigate, usePrefs } from "../App";
 import { BarChart } from "../charts/BarChart";
-import { BodyMap, HeatLegend } from "../charts/BodyMap";
+import { BodyMap, HeatLegend, LoadLegend } from "../charts/BodyMap";
+import { MuscleWeekGrid } from "../charts/MuscleWeekGrid";
+import { ProgressHealth } from "../components/ProgressHealth";
 import { CalendarHeatmap } from "../charts/CalendarHeatmap";
 import { RangePicker, inRange, isoDate, phaseRange, presetRange, today, type Range } from "../charts/RangePicker";
 import { ScatterChart } from "../charts/ScatterChart";
@@ -27,7 +29,7 @@ import { ShareButton } from "../share/ShareDialog";
 import { formatVolume, parseLocal, toUnit } from "../format";
 
 export default function StatsPage() {
-  const [range, setRange] = useState<Range>(presetRange("4w"));
+  const [range, setRange] = useState<Range>(presetRange("all"));
   const [phases, setPhases] = useState<Phase[]>([]);
   const [groups, setGroups] = useState<MuscleGroup[]>([]);
   const [muscles, setMuscles] = useState<Muscle[]>([]);
@@ -65,7 +67,57 @@ function bandsOf(phases: Phase[]): Band[] {
   }));
 }
 
-// ---- Body map -------------------------------------------------------------------------------------
+// ---- Body map ----
+
+/** Weekly set targets per muscle (they depend on the current goal). */
+function useTargets(): Record<string, [number, number]> {
+  const [targets, setTargets] = useState<MuscleTarget[]>([]);
+  useEffect(() => {
+    const load = () => api.muscleTargets().then(setTargets);
+    load();
+    window.addEventListener("goal-changed", load);
+    return () => window.removeEventListener("goal-changed", load);
+  }, []);
+  return useMemo(
+    () => Object.fromEntries(targets.filter((t) => t.max_sets > 0).map((t) => [t.muscle_id, [t.min_sets, t.max_sets]])),
+    [targets],
+  );
+}
+
+/** Length of a range in weeks (at least 1); all-time starts at the first workout. */
+function weeksIn(range: Range, firstWorkout: string | null): number {
+  const from = range.from ?? firstWorkout;
+  if (!from) return 1;
+  const to = range.to ? parseLocal(range.to) : new Date();
+  return Math.max(1, (to.getTime() - parseLocal(from).getTime() + 86400000) / (7 * 86400000));
+}
+
+function WeeksGrid({
+  range,
+  names,
+  muscles,
+  targets,
+}: {
+  range: Range;
+  names: Record<string, string>;
+  muscles: Muscle[];
+  targets: Record<string, [number, number]>;
+}) {
+  const [weekly, setWeekly] = useState<WeekMuscleSets[]>([]);
+  useEffect(() => {
+    api.weeklyMuscleSets(range.from ?? undefined, range.to ?? undefined).then(setWeekly);
+  }, [range]);
+  return (
+    <div>
+      <p className="muted small">
+        Sets per week for each muscle, against its weekly target. Dark cells are weeks of more work than you can likely recover from.
+      </p>
+      <MuscleWeekGrid weekly={weekly} muscles={muscles.map((m) => m.id)} names={names} targets={targets} />
+    </div>
+  );
+}
+
+// ---- Body map: sections ----------------------------------------------------------------------------
 
 function MuscleMapSection({
   range,
@@ -80,18 +132,26 @@ function MuscleMapSection({
 }) {
   const { unit } = usePrefs();
   const [metric, setMetric] = useState<"sets" | "volume">("sets");
-  const [mode, setMode] = useState<"map" | "compare" | "animate">("map");
+  const [mode, setMode] = useState<"map" | "health" | "grid" | "compare" | "animate">("map");
   const [stats, setStats] = useState<MuscleStat[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [last, setLast] = useState<LastTrained[]>([]);
 
+  const targets = useTargets();
+  const [firstWorkout, setFirstWorkout] = useState<string | null>(null);
   useEffect(() => {
     api.muscleSets(range.from ?? undefined, range.to ?? undefined).then(setStats);
     api.lastTrained(today()).then(setLast);
   }, [range]);
+  useEffect(() => {
+    api.workoutsPerPeriod(false, today()).then((w) => setFirstWorkout(w[0]?.start ?? null));
+  }, []);
 
-  const value = (s: MuscleStat) => (metric === "sets" ? s.sets : toUnit(s.volume_kg, unit));
+  // Sets are shown per week so they can be judged against weekly targets.
+  const weeks = weeksIn(range, firstWorkout);
+  const value = (s: MuscleStat) => (metric === "sets" ? s.sets / weeks : toUnit(s.volume_kg, unit));
   const values = Object.fromEntries(stats.map((s) => [s.muscle_id, value(s)]));
+  const mapTargets = metric === "sets" ? targets : undefined;
   const sel = stats.find((s) => s.muscle_id === selected);
 
   return (
@@ -110,9 +170,9 @@ function MuscleMapSection({
           </button>
         </div>
         <div className="segmented small">
-          {(["map", "compare", "animate"] as const).map((m) => (
+          {(["map", "health", "grid", "compare", "animate"] as const).map((m) => (
             <button key={m} className={mode === m ? "active" : ""} onClick={() => setMode(m)}>
-              {{ map: "Map", compare: "Compare", animate: "Week by week" }[m]}
+              {{ map: "Map", health: "Health", grid: "Grid", compare: "Compare", animate: "Replay" }[m]}
             </button>
           ))}
         </div>
@@ -126,6 +186,7 @@ function MuscleMapSection({
             legendLabel={metric === "sets" ? "sets" : unit}
             muscleNames={names}
             height={360}
+            targets={mapTargets}
           />
           <div className="muscle-detail">
             {sel ? (
@@ -158,8 +219,10 @@ function MuscleMapSection({
           </div>
         </div>
       )}
-      {mode === "compare" && <CompareMaps phases={phases} metric={metric} names={names} unit={unit} />}
-      {mode === "animate" && <AnimatedWeeks range={range} metric={metric} names={names} unit={unit} />}
+      {mode === "health" && <ProgressHealth names={names} />}
+      {mode === "grid" && <WeeksGrid range={range} names={names} muscles={muscles} targets={targets} />}
+      {mode === "compare" && <CompareMaps phases={phases} metric={metric} names={names} unit={unit} targets={mapTargets} />}
+      {mode === "animate" && <AnimatedWeeks range={range} metric={metric} names={names} unit={unit} targets={mapTargets} />}
       <details>
         <summary className="small muted">Table view</summary>
         <table className="sets small">
@@ -241,11 +304,13 @@ function CompareMaps({
   metric,
   names,
   unit,
+  targets,
 }: {
   phases: Phase[];
   metric: "sets" | "volume";
   names: Record<string, string>;
   unit: "kg" | "lb";
+  targets?: Record<string, [number, number]>;
 }) {
   const options: Range[] = [presetRange("week"), presetRange("4w"), presetRange("3m"), ...phases.map(phaseRange)];
   // Default: last two phases if there are any, else the previous vs this 4 weeks.
@@ -293,14 +358,14 @@ function CompareMaps({
       <div className="compare-maps">
         <div>
           {select(aKey, setA)}
-          <BodyMap values={va} max={max} height={260} muscleNames={names} showLegend={false} />
+          <BodyMap values={va} max={max} height={260} muscleNames={names} showLegend={false} targets={targets} />
         </div>
         <div>
           {select(bKey, setB)}
-          <BodyMap values={vb} max={max} height={260} muscleNames={names} showLegend={false} />
+          <BodyMap values={vb} max={max} height={260} muscleNames={names} showLegend={false} targets={targets} />
         </div>
       </div>
-      <HeatLegend max={max} label={`${metric === "sets" ? "sets" : unit} / week`} />
+      {targets ? <LoadLegend /> : <HeatLegend max={max} label={`${metric === "sets" ? "sets" : unit} / week`} />}
     </div>
   );
 }
@@ -310,11 +375,13 @@ function AnimatedWeeks({
   metric,
   names,
   unit,
+  targets,
 }: {
   range: Range;
   metric: "sets" | "volume";
   names: Record<string, string>;
   unit: "kg" | "lb";
+  targets?: Record<string, [number, number]>;
 }) {
   const [weekly, setWeekly] = useState<WeekMuscleSets[]>([]);
   const [i, setI] = useState(0);
@@ -347,7 +414,14 @@ function AnimatedWeeks({
         <input type="range" min={0} max={weeks.length - 1} value={i} onChange={(e) => setI(Number(e.target.value))} style={{ flex: 1 }} />
         <span className="small">Week of {wk}</span>
       </div>
-      <BodyMap values={values} max={max} height={320} muscleNames={names} legendLabel={metric === "sets" ? "sets" : unit} />
+      <BodyMap
+        values={values}
+        max={max}
+        height={320}
+        muscleNames={names}
+        legendLabel={metric === "sets" ? "sets" : unit}
+        targets={targets}
+      />
     </div>
   );
 }
@@ -357,11 +431,17 @@ function AnimatedWeeks({
 function TargetsSection({ range, names }: { range: Range; names: Record<string, string> }) {
   const [targets, setTargets] = useState<MuscleTarget[]>([]);
   const [stats, setStats] = useState<MuscleStat[]>([]);
+  const [firstWorkout, setFirstWorkout] = useState<string | null>(null);
   useEffect(() => {
     api.muscleTargets().then(setTargets);
     api.muscleSets(range.from ?? undefined, range.to ?? undefined).then(setStats);
   }, [range]);
-  const from = range.from ? parseLocal(range.from) : null;
+  useEffect(() => {
+    // "All time" has no start date: average over the weeks since the first workout.
+    api.workoutsPerPeriod(false, today()).then((w) => setFirstWorkout(w[0]?.start ?? null));
+  }, []);
+  const fromStr = range.from ?? firstWorkout;
+  const from = fromStr ? parseLocal(fromStr) : null;
   const weeks = from
     ? Math.max(1, Math.round(((range.to ? parseLocal(range.to) : new Date()).getTime() - from.getTime()) / (7 * 86400000)))
     : null;

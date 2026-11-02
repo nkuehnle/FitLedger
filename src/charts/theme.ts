@@ -34,6 +34,16 @@ const SEQ = [
   "#0d366b",
 ];
 
+/** Training load: white (little) → red (in the weekly target) → near-black (beyond what you can
+ *  recover from). One hue with monotonically falling lightness, same in both themes. */
+export const LOAD_RAMP: [number, string][] = [
+  [0, "#fdecea"],
+  [0.5, "#f4a08f"],
+  [0.65, "#e34948"],
+  [0.8, "#a3161b"],
+  [1, "#22060a"],
+];
+
 export const LIGHT: ChartTheme = {
   mode: "light",
   surface: "#ffffff",

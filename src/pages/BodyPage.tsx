@@ -15,12 +15,13 @@ import {
   type WeighInRow,
 } from "../api";
 import { usePrefs } from "../App";
-import { RangePicker, inRange, isoDate, presetRange, today, type Range } from "../charts/RangePicker";
+import { RangePicker, inRange, presetRange, today, type Range } from "../charts/RangePicker";
 import { TimeSeriesChart, type Band, type Point } from "../charts/TimeSeriesChart";
 import { useChartTheme } from "../charts/theme";
 import { Modal } from "../components/Modal";
 import { ShareButton } from "../share/ShareDialog";
-import { formatDate, formatTime, parseLocal, toUnit } from "../format";
+import { formatDate, formatTime, nowLocal, parseLocal, toUnit } from "../format";
+import { GOAL_TEXT, goalStatus, type GoalInfo } from "../goal";
 
 const KG_PER_LB = 0.45359237;
 type Tab = "weight" | "inbody" | "diet" | "parts";
@@ -29,7 +30,7 @@ export default function BodyPage({ tab, part }: { tab: Tab; part?: string }) {
   return (
     <div className="page">
       <h1 className="page-title">Measure</h1>
-      <GoalToggle />
+      <GoalPanel />
       <div className="segmented tabs-scroll">
         {(["weight", "parts", "inbody", "diet"] as Tab[]).map((t) => (
           <a key={t} href={`#/body/${t}`} className={tab === t ? "seg-link active" : "seg-link"}>
@@ -47,73 +48,148 @@ export default function BodyPage({ tab, part }: { tab: Tab; part?: string }) {
 
 // ---- Goal -------------------------------------------------------------------------------------------
 
-const GOAL_TEXT: Record<Goal, string> = { cut: "Cut", maintain: "Maintain", gain: "Gain" };
+type GoalEntry = Awaited<ReturnType<typeof api.goalHistory>>[number];
+const signed = (v: number, digits = 1) => `${v > 0 ? "+" : v < 0 ? "−" : "±"}${Math.abs(v).toFixed(digits)}`;
 
-/** Cut / maintain / gain. Choosing one starts a nutrition phase from today (shaded on charts). */
-function GoalToggle() {
-  const [goal, setGoal] = useState<Goal | null | undefined>(undefined);
-  useEffect(() => {
-    api.currentGoal().then((g) => setGoal(g.goal));
-  }, []);
-  if (goal === undefined) return null;
+/** Weekly target input: blank means "use the default range for the goal". Stored as kg/week. */
+function rateText(kg: number | null, unit: "kg" | "lb") {
+  return kg == null ? "" : String(Math.round(toUnit(kg, unit) * 100) / 100);
+}
+function parseRate(text: string, goal: Goal, unit: "kg" | "lb"): number | null {
+  const v = Number(text);
+  if (!text.trim() || !isFinite(v)) return null;
+  const kg = unit === "lb" ? v * KG_PER_LB : v;
+  // Typing "1" on a cut means losing 1 a week.
+  return goal === "cut" ? -Math.abs(kg) : goal === "gain" ? Math.abs(kg) : kg;
+}
+
+/** Cut / maintain / gain over time. Switching starts a new nutrition phase today (shaded on charts);
+ *  earlier goals can be backdated, and each goal can have its own weekly target. */
+function GoalPanel() {
+  const { unit } = usePrefs();
+  const [info, setInfo] = useState<GoalInfo | null>(null);
+  const [history, setHistory] = useState<GoalEntry[]>([]);
+  const [rate, setRate] = useState("");
+  const [add, setAdd] = useState<{ goal: Goal; start: string; rate: string }>({ goal: "cut", start: today(), rate: "" });
+  const load = () => {
+    api.currentGoal().then((g) => {
+      setInfo(g);
+      setRate(rateText(g.weekly_rate_kg, unit));
+    });
+    api.goalHistory().then(setHistory);
+  };
+  useEffect(load, [unit]);
+  const changed = () => {
+    load();
+    window.dispatchEvent(new Event("goal-changed"));
+  };
+  if (!info) return null;
+  const goal = info.goal;
   return (
-    <div className="goal-row">
-      <span className="small muted">Goal</span>
-      <div className="segmented small">
-        {(["cut", "maintain", "gain"] as Goal[]).map((g) => (
-          <button
-            key={g}
-            className={goal === g ? "active" : ""}
-            onClick={() => {
-              if (goal === g) return;
-              api.setGoal(g).then(() => {
-                setGoal(g);
-                window.dispatchEvent(new Event("goal-changed"));
-              });
-            }}
-          >
-            {GOAL_TEXT[g]}
-          </button>
-        ))}
+    <div className="goal-panel">
+      <div className="goal-row">
+        <span className="small muted">Goal</span>
+        <div className="segmented small">
+          {(["cut", "maintain", "gain"] as Goal[]).map((g) => (
+            <button key={g} className={goal === g ? "active" : ""} onClick={() => goal !== g && api.setGoal(g).then(changed)}>
+              {GOAL_TEXT[g]}
+            </button>
+          ))}
+        </div>
+        {goal && (
+          <label className="small goal-target">
+            Target
+            <input
+              className="input small-input"
+              inputMode="decimal"
+              placeholder="default"
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+              onBlur={() => {
+                const kg = parseRate(rate, goal, unit);
+                if (kg !== info.weekly_rate_kg) api.setGoal(goal, info.start_date ?? undefined, kg).then(changed);
+              }}
+            />
+            {unit}/week
+          </label>
+        )}
+        {info.start_date && <span className="small muted">since {formatDate(info.start_date)}</span>}
       </div>
+      <details className="goal-history">
+        <summary className="small">Goal history</summary>
+        <table className="table small">
+          <tbody>
+            {[...history].reverse().map((h) => (
+              <tr key={h.phase_id}>
+                <td>{GOAL_TEXT[h.goal]}</td>
+                <td>
+                  {formatDate(h.start_date)} – {h.end_date ? formatDate(h.end_date) : "now"}
+                </td>
+                <td className="muted">
+                  {h.weekly_rate_kg != null ? `${signed(toUnit(h.weekly_rate_kg, unit), 2)} ${unit}/wk` : "default"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="row small">
+          <select className="input" value={add.goal} onChange={(e) => setAdd({ ...add, goal: e.target.value as Goal })}>
+            {(["cut", "maintain", "gain"] as Goal[]).map((g) => (
+              <option key={g} value={g}>
+                {GOAL_TEXT[g]}
+              </option>
+            ))}
+          </select>
+          from
+          <input className="input" type="date" value={add.start} onChange={(e) => setAdd({ ...add, start: e.target.value })} />
+          <input
+            className="input small-input"
+            inputMode="decimal"
+            placeholder={`${unit}/wk`}
+            value={add.rate}
+            onChange={(e) => setAdd({ ...add, rate: e.target.value })}
+          />
+          <button
+            className="button"
+            disabled={!add.start}
+            onClick={() => api.setGoal(add.goal, add.start, parseRate(add.rate, add.goal, unit)).then(changed)}
+          >
+            Add
+          </button>
+        </div>
+        <p className="small muted">Adding a goal with an earlier start date ends the goal before it on that date.</p>
+      </details>
     </div>
   );
 }
 
 /** Target vs actual weekly rate of weight change for the current goal. */
 function GoalRate({ rows, unit }: { rows: WeighInRow[]; unit: "kg" | "lb" }) {
-  const [info, setInfo] = useState<{ goal: Goal | null; rate_pct: [number, number] | null } | null>(null);
+  const [info, setInfo] = useState<GoalInfo | null>(null);
   useEffect(() => {
     const load = () => api.currentGoal().then(setInfo);
     load();
     window.addEventListener("goal-changed", load);
     return () => window.removeEventListener("goal-changed", load);
   }, []);
-  if (!info?.goal || !info.rate_pct) return null;
-  // Actual: change over the last 4 weeks of weigh-ins, as % of bodyweight per week.
-  const recent = rows.filter((r) => r.source !== "inbody" && parseLocal(r.at).getTime() > Date.now() - 28 * 86400000);
-  const avg = (rs: WeighInRow[]) => rs.reduce((n, r) => n + r.weight_kg, 0) / rs.length;
-  const firstWeek = recent.filter((r) => parseLocal(r.at).getTime() < Date.now() - 21 * 86400000);
-  const lastWeek = recent.filter((r) => parseLocal(r.at).getTime() > Date.now() - 7 * 86400000);
-  const actual = firstWeek.length && lastWeek.length ? ((avg(lastWeek) - avg(firstWeek)) / avg(firstWeek) / 3) * 100 : null;
-  const [lo, hi] = info.rate_pct;
-  const bw = rows.length ? rows[rows.length - 1].weight_kg : null;
-  const amount = (pct: number) => (bw ? `${Math.abs(toUnit((bw * pct) / 100, unit)).toFixed(1)}` : "");
-  const sign = (v: number) => (v > 0 ? "+" : v < 0 ? "−" : "±");
+  const s = goalStatus(info, rows, []);
+  if (!s) return null;
+  const u = (kg: number) => toUnit(kg, unit);
+  const [lo, hi] = s.targetKg;
   const aim =
-    info.goal === "maintain"
-      ? `stay within ±${hi}% a week (±${amount(hi)} ${unit})`
-      : `${info.goal === "cut" ? "lose" : "gain"} ${Math.abs(info.goal === "cut" ? hi : lo)}–${Math.abs(info.goal === "cut" ? lo : hi)}% of bodyweight a week (${amount(Math.abs(lo))}–${amount(Math.abs(hi))} ${unit})`;
-  const onTrack = actual != null && actual >= lo && actual <= hi;
+    lo === hi
+      ? `${signed(u(lo), 2)} ${unit} a week`
+      : s.goal === "maintain"
+        ? `within ±${u(hi).toFixed(1)} ${unit} a week`
+        : `${signed(u(lo))} to ${signed(u(hi))} ${unit} a week`;
   return (
     <p className="small goal-rate">
-      <strong>{GOAL_TEXT[info.goal]}:</strong> aim to {aim}.{" "}
-      {actual == null ? (
+      <strong>{GOAL_TEXT[s.goal]}:</strong> aim for {aim}.{" "}
+      {s.actualKg == null ? (
         <span className="muted">Weigh in over a few weeks to see your rate.</span>
       ) : (
         <span>
-          Last 3 weeks: {sign(actual)}
-          {Math.abs(actual).toFixed(2)}% a week{onTrack ? " (on target)." : "."}
+          Last 3 weeks: {signed(u(s.actualKg), 2)} {unit} a week{s.onTrack ? " (on target)." : "."}
         </span>
       )}
     </p>
@@ -227,18 +303,13 @@ function bandsOf(phases: Phase[]): Band[] {
   }));
 }
 
-function nowLocal(): string {
-  const d = new Date();
-  return `${isoDate(d)} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:00`;
-}
-
 // ---- Bodyweight ---------------------------------------------------------------------------------------
 
 function BodyweightTab() {
   const { unit } = usePrefs();
   const [rows, setRows] = useState<WeighInRow[]>([]);
   const [phases, setPhases] = useState<Phase[]>([]);
-  const [range, setRange] = useState<Range>(presetRange("1y"));
+  const [range, setRange] = useState<Range>(presetRange("all"));
   const [showInbody, setShowInbody] = useState(true);
   const [entry, setEntry] = useState("");
   const [hide, setHide] = useState(false);
@@ -931,7 +1002,7 @@ function DietTab() {
   const [days, setDays] = useState<DietDay[]>([]);
   const [energy, setEnergy] = useState<EnergyPoint[]>([]);
   const [window_, setWindow] = useState(14);
-  const [range, setRange] = useState<Range>(presetRange("6m"));
+  const [range, setRange] = useState<Range>(presetRange("all"));
   const [phases, setPhases] = useState<Phase[]>([]);
   const [date, setDate] = useState(today());
   const load = () => {

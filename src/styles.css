@@ -1994,3 +1994,236 @@ button.start-row,
 a.start-row {
   width: 100%;
 }
+
+/* Today card (top of the Workouts tab) */
+.today-card {
+  padding: 10px 12px;
+}
+.today-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 16px;
+}
+.today-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+.today-stat strong {
+  font-size: 1.15rem;
+}
+.row.tight {
+  margin-top: 2px;
+  flex-wrap: nowrap;
+}
+.small-input {
+  width: 6.5em;
+  min-width: 0;
+}
+.goal-panel {
+  margin-bottom: 10px;
+}
+.goal-row {
+  flex-wrap: wrap;
+}
+.goal-target {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.goal-history summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.goal-history .table {
+  margin: 6px 0;
+}
+
+/* Denser live workout: title and chips share a line, tighter rows; on wide screens single
+   exercises sit two to a row and superset partners side by side. */
+.workout-page {
+  max-width: 1200px;
+}
+.workout-page .card {
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.workout-head {
+  padding: 2px 0 6px;
+}
+.workout-head .row {
+  margin-top: 2px;
+}
+.title-input {
+  font-size: 1.25rem;
+  padding: 2px 0;
+}
+.notes-input {
+  margin-top: 4px;
+}
+.exercise-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+}
+.exercise-live-head h3 {
+  margin: 0;
+}
+.exercise-live + .exercise-live {
+  margin-top: 8px;
+  padding-top: 8px;
+}
+.set-table {
+  margin-top: 4px;
+}
+.set-table td {
+  padding: 2px 4px;
+}
+input.num {
+  height: 36px;
+}
+.check {
+  height: 36px;
+  width: 42px;
+}
+.set-type {
+  height: 34px;
+}
+.exercise-actions {
+  margin-top: 4px;
+}
+.last-time {
+  padding: 4px 8px;
+  margin: 4px 0;
+}
+.workout-groups {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0 10px;
+  align-items: start;
+}
+@media (min-width: 900px) {
+  .workout-groups {
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  }
+  .workout-groups > .superset-card {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 0 20px;
+  }
+  .superset-card > .superset-label {
+    grid-column: 1 / -1;
+  }
+  .superset-card > .exercise-live + .exercise-live {
+    border-top: none;
+    margin-top: 0;
+    padding-top: 0;
+  }
+}
+
+/* Slightly tighter cards and titles everywhere. */
+.card {
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.page-title {
+  font-size: 1.4rem;
+  margin: 2px 0 10px;
+}
+
+/* Fullscreen chart */
+.chart-expand {
+  margin-left: auto;
+  min-width: 32px;
+  min-height: 30px;
+  font-size: 1rem;
+  color: var(--muted);
+}
+.chart-full {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) 12px calc(env(safe-area-inset-bottom, 0px) + 8px);
+}
+.chart-full-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+.chart-full-head .chart-controls {
+  margin-bottom: 0;
+}
+.chart-full-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.chart-full-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.week-picker {
+  display: flex;
+  width: 100%;
+}
+.week-picker button {
+  flex: 1;
+  min-width: 0;
+  padding-left: 2px;
+  padding-right: 2px;
+}
+.chart-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.load-legend {
+  max-width: 340px;
+  margin: 6px auto 0;
+}
+.load-ramp {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+}
+.load-labels {
+  display: grid;
+  grid-template-columns: 5fr 3fr 2fr;
+  text-align: center;
+  margin-top: 2px;
+}
+.health-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2px;
+}
+.health-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+  margin-top: 4px;
+}
+.health-signals {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0;
+  display: grid;
+  gap: 8px;
+}
+.health-signals li {
+  display: flex;
+  gap: 8px;
+}

@@ -54,6 +54,18 @@ pub struct Phase {
     pub notes: Option<String>,
 }
 
+/// One stretch of cut / maintain / gain (a nutrition phase), with an optional weekly target.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct GoalEntry {
+    pub phase_id: i64,
+    pub goal: Goal,
+    pub start_date: String,
+    pub end_date: Option<String>,
+    /// Target change in bodyweight per week (kg; negative = losing). `None` uses the default
+    /// research-based % range for the goal.
+    pub weekly_rate_kg: Option<f64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MuscleTarget {
     pub muscle_id: String,
@@ -336,35 +348,62 @@ impl Db {
         Ok(acc.into_iter().collect())
     }
 
-    /// The goal from the nutrition phase active on `today`, if any.
+    /// Every cut / maintain / gain stretch, oldest first.
+    pub fn goal_history(&self) -> Result<Vec<GoalEntry>> {
+        let mut stmt = self.conn().prepare(
+            "SELECT id, name, start_date, end_date, weekly_rate_kg FROM phase WHERE lane = 'nutrition' ORDER BY start_date, id",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, Option<f64>>(4)?))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (phase_id, name, start_date, end_date, weekly_rate_kg) = row?;
+            if let Some(goal) = Goal::from_phase_name(&name) {
+                out.push(GoalEntry { phase_id, goal, start_date, end_date, weekly_rate_kg });
+            }
+        }
+        Ok(out)
+    }
+
+    /// The goal stretch active on `day`, if any.
+    pub fn goal_on(&self, day: NaiveDate) -> Result<Option<GoalEntry>> {
+        let d = day.to_string();
+        Ok(self
+            .goal_history()?
+            .into_iter()
+            .filter(|g| g.start_date.as_str() <= d.as_str() && g.end_date.as_deref().map_or(true, |e| e >= d.as_str()))
+            .next_back())
+    }
+
     pub fn current_goal(&self, today: NaiveDate) -> Result<Option<Goal>> {
-        let d = today.to_string();
-        let name: Option<String> = self
-            .conn()
+        Ok(self.goal_on(today)?.map(|g| g.goal))
+    }
+
+    /// Records `goal` from `start` on. A goal stretch covering `start` ends the day before; if a
+    /// later stretch exists the new one ends the day before it, so the history stays in order.
+    /// Setting a goal on a day that already starts one replaces it.
+    pub fn set_goal(&mut self, goal: Goal, start: NaiveDate, weekly_rate_kg: Option<f64>) -> Result<()> {
+        let d = start.to_string();
+        let day_before = (start - Duration::days(1)).to_string();
+        let tx = self.conn_mut().transaction()?;
+        tx.execute("DELETE FROM phase WHERE lane = 'nutrition' AND start_date = ?1", [&d])?;
+        tx.execute(
+            "UPDATE phase SET end_date = ?2 WHERE lane = 'nutrition' AND start_date < ?1 AND (end_date IS NULL OR end_date >= ?1)",
+            params![d, day_before],
+        )?;
+        let next: Option<String> = tx
             .query_row(
-                "SELECT name FROM phase WHERE lane = 'nutrition' AND start_date <= ?1 AND (end_date IS NULL OR end_date >= ?1)
-                 ORDER BY start_date DESC, id DESC LIMIT 1",
+                "SELECT min(start_date) FROM phase WHERE lane = 'nutrition' AND start_date > ?1",
                 [&d],
                 |r| r.get(0),
             )
-            .optional()?;
-        Ok(name.as_deref().and_then(Goal::from_phase_name))
-    }
-
-    /// Switches the goal from `today`: ends the running nutrition phase yesterday (or removes it
-    /// if it only started today) and starts a new one named after the goal.
-    pub fn set_goal(&mut self, goal: Goal, today: NaiveDate) -> Result<()> {
-        let d = today.to_string();
-        let yesterday = (today - Duration::days(1)).to_string();
-        let tx = self.conn_mut().transaction()?;
-        tx.execute("DELETE FROM phase WHERE lane = 'nutrition' AND start_date >= ?1", [&d])?;
+            .optional()?
+            .flatten();
+        let end = next.map(|n| (parse_date(&n).expect("stored dates are valid") - Duration::days(1)).to_string());
         tx.execute(
-            "UPDATE phase SET end_date = ?2 WHERE lane = 'nutrition' AND start_date < ?1 AND (end_date IS NULL OR end_date >= ?1)",
-            params![d, yesterday],
-        )?;
-        tx.execute(
-            "INSERT INTO phase (name, lane, start_date) VALUES (?1, 'nutrition', ?2)",
-            params![goal.label(), d],
+            "INSERT INTO phase (name, lane, start_date, end_date, weekly_rate_kg) VALUES (?1, 'nutrition', ?2, ?3, ?4)",
+            params![goal.label(), d, end, weekly_rate_kg],
         )?;
         tx.commit()?;
         Ok(())
@@ -680,19 +719,19 @@ mod tests {
     fn goals_are_nutrition_phases() {
         let mut db = Db::open_in_memory().unwrap();
         assert_eq!(db.current_goal(d("2026-11-01")).unwrap(), None);
-        db.set_goal(Goal::Gain, d("2026-09-01")).unwrap();
-        db.set_goal(Goal::Cut, d("2026-11-01")).unwrap();
+        db.set_goal(Goal::Gain, d("2026-09-01"), None).unwrap();
+        db.set_goal(Goal::Cut, d("2026-11-01"), None).unwrap();
         assert_eq!(db.current_goal(d("2026-10-15")).unwrap(), Some(Goal::Gain));
         assert_eq!(db.current_goal(d("2026-11-02")).unwrap(), Some(Goal::Cut));
         let phases = db.list_phases().unwrap();
         assert_eq!((phases[0].name.as_str(), phases[0].end_date.as_deref()), ("Gain", Some("2026-10-31")));
         // Changing your mind the same day replaces the phase rather than leaving a 0-day one.
-        db.set_goal(Goal::Maintain, d("2026-11-01")).unwrap();
+        db.set_goal(Goal::Maintain, d("2026-11-01"), None).unwrap();
         assert_eq!(db.list_phases().unwrap().len(), 2);
         assert_eq!(db.current_goal(d("2026-11-01")).unwrap(), Some(Goal::Maintain));
 
         // A cut lowers the default minimum; a saved target wins over defaults.
-        db.set_goal(Goal::Cut, d("2026-11-01")).unwrap();
+        db.set_goal(Goal::Cut, d("2026-11-01"), None).unwrap();
         let t = db.muscle_targets(d("2026-11-01")).unwrap();
         let quads = t.iter().find(|x| x.muscle_id == "quads").unwrap();
         assert_eq!((quads.min_sets, quads.max_sets), (6.0, 20.0));
@@ -702,6 +741,33 @@ mod tests {
         // Imported "Bulk" phases count as gaining.
         db.save_phase(&Phase { id: None, name: "Bulk".into(), lane: "nutrition".into(), start_date: "2027-01-01".into(), end_date: None, color: None, notes: None }).unwrap();
         assert_eq!(db.current_goal(d("2027-01-02")).unwrap(), Some(Goal::Gain));
+    }
+
+    #[test]
+    fn goal_history_with_backdating_and_weekly_targets() {
+        let mut db = Db::open_in_memory().unwrap();
+        db.set_goal(Goal::Gain, d("2026-01-01"), Some(0.2)).unwrap();
+        db.set_goal(Goal::Maintain, d("2026-09-01"), None).unwrap();
+        // Recorded later: there was a cut from March to August.
+        db.set_goal(Goal::Cut, d("2026-03-01"), Some(-0.45)).unwrap();
+        let h: Vec<_> = db
+            .goal_history()
+            .unwrap()
+            .into_iter()
+            .map(|g| (g.goal, g.start_date, g.end_date, g.weekly_rate_kg))
+            .collect();
+        assert_eq!(
+            h,
+            [
+                (Goal::Gain, "2026-01-01".to_string(), Some("2026-02-28".to_string()), Some(0.2)),
+                (Goal::Cut, "2026-03-01".to_string(), Some("2026-08-31".to_string()), Some(-0.45)),
+                (Goal::Maintain, "2026-09-01".to_string(), None, None),
+            ]
+        );
+        assert_eq!(db.goal_on(d("2026-05-01")).unwrap().unwrap().weekly_rate_kg, Some(-0.45));
+        assert_eq!(db.current_goal(d("2026-11-02")).unwrap(), Some(Goal::Maintain));
+        // Program phases are separate and untouched.
+        assert!(db.list_phases().unwrap().iter().all(|p| p.lane == "nutrition"));
     }
 
     #[test]

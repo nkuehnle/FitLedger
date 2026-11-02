@@ -13,7 +13,7 @@ use liftbook_core::export::BackupInfo;
 use liftbook_core::history::{WorkoutCard, WorkoutDetail};
 use liftbook_core::library::{library, Muscle, MuscleGroup};
 use liftbook_core::live::{ExerciseUpdate, OrderEntry, Previous, SetUpdate, StartFrom, WorkoutUpdate};
-use liftbook_core::planning::{Goal, HistoryProposal, MuscleTarget, Phase, Program, Schedule, Suggestion};
+use liftbook_core::planning::{Goal, GoalEntry, HistoryProposal, MuscleTarget, Phase, Program, Schedule, Suggestion};
 use liftbook_core::review::{NameReview, SuggestionView};
 use liftbook_core::stats::{DiscomfortPoint, ExerciseStats, LastTrained, MuscleStat, PeriodCount, Streak, WeekMuscleSets, WorkoutPoint};
 use liftbook_core::strong::{self, ImportOptions};
@@ -144,6 +144,33 @@ fn import_bodyweight(state: State<AppState>, text: String, file_name: String, we
         default_display_unit(db, Some(imp.weight_unit))?;
         Ok(out)
     })
+}
+
+#[derive(Serialize)]
+struct MeasurementPreview {
+    entries: usize,
+    parts: Vec<String>,
+    first: Option<String>,
+    last: Option<String>,
+    warnings: Vec<String>,
+}
+
+#[tauri::command]
+fn preview_measurements(text: String) -> CmdResult<MeasurementPreview> {
+    let imp = strong::parse_measurements(&text).map_err(err)?;
+    Ok(MeasurementPreview {
+        entries: imp.entries.len(),
+        first: imp.entries.first().map(|e| e.measured_at_local.to_string()),
+        last: imp.entries.last().map(|e| e.measured_at_local.to_string()),
+        parts: imp.parts,
+        warnings: imp.warnings,
+    })
+}
+
+#[tauri::command]
+fn import_measurements(state: State<AppState>, text: String, file_name: String) -> CmdResult<ImportOutcome> {
+    let imp = strong::parse_measurements(&text).map_err(err)?;
+    with(&state, |db| db.import_measurements(&imp, &file_name))
 }
 
 // ---- Name review --------------------------------------------------------------------------------
@@ -441,21 +468,40 @@ fn muscle_targets(state: State<AppState>, today: String) -> CmdResult<Vec<Muscle
 #[derive(Serialize)]
 struct GoalInfo {
     goal: Option<Goal>,
-    /// Target weekly bodyweight change in % (low, high).
+    /// Default target weekly bodyweight change in % (low, high) for the goal.
     rate_pct: Option<(f64, f64)>,
+    /// The user's own weekly target (kg/week), if set.
+    weekly_rate_kg: Option<f64>,
+    start_date: Option<String>,
 }
 
 #[tauri::command]
 fn current_goal(state: State<AppState>, today: String) -> CmdResult<GoalInfo> {
     let d = date(&today)?;
-    let goal = with(&state, |db| db.current_goal(d))?;
-    Ok(GoalInfo { goal, rate_pct: goal.map(Goal::weekly_rate_pct) })
+    let entry = with(&state, |db| db.goal_on(d))?;
+    Ok(GoalInfo {
+        goal: entry.as_ref().map(|e| e.goal),
+        rate_pct: entry.as_ref().map(|e| e.goal.weekly_rate_pct()),
+        weekly_rate_kg: entry.as_ref().and_then(|e| e.weekly_rate_kg),
+        start_date: entry.map(|e| e.start_date),
+    })
 }
 
 #[tauri::command]
-fn set_goal(state: State<AppState>, goal: Goal, today: String) -> CmdResult<()> {
+fn progress_health(state: State<AppState>, today: String) -> CmdResult<Vec<liftbook_core::health::MuscleHealth>> {
     let d = date(&today)?;
-    with(&state, |db| db.set_goal(goal, d))
+    with(&state, |db| db.progress_health(d))
+}
+
+#[tauri::command]
+fn goal_history(state: State<AppState>) -> CmdResult<Vec<GoalEntry>> {
+    with(&state, |db| db.goal_history())
+}
+
+#[tauri::command]
+fn set_goal(state: State<AppState>, goal: Goal, start: String, weekly_rate_kg: Option<f64>) -> CmdResult<()> {
+    let d = date(&start)?;
+    with(&state, |db| db.set_goal(goal, d, weekly_rate_kg))
 }
 
 #[tauri::command]
@@ -508,9 +554,12 @@ fn weigh_ins(state: State<AppState>, include_inbody: bool) -> CmdResult<Vec<Weig
 }
 
 #[tauri::command]
-fn add_weigh_in(state: State<AppState>, at: String, weight_kg: f64) -> CmdResult<i64> {
+fn add_weigh_in(app: tauri::AppHandle, state: State<AppState>, at: String, weight_kg: f64) -> CmdResult<i64> {
     let t = strong_time(&at)?;
-    with(&state, |db| db.add_weigh_in(t, weight_kg))
+    let id = with(&state, |db| db.add_weigh_in(t, weight_kg))?;
+    // Lets the Android weigh-in reminder skip a day that's already logged.
+    native_call(&app, "weighedIn", serde_json::json!({ "date": t.date().to_string() }))?;
+    Ok(id)
 }
 
 fn strong_time(s: &str) -> CmdResult<NaiveDateTime> {
@@ -693,6 +742,16 @@ fn share_png(app: tauri::AppHandle, name: String, data: String) -> CmdResult<()>
     share_file(&app, &path, "image/png", "Share image")
 }
 
+/// Android: saves a PNG (sent as base64) to the gallery, Pictures/Liftbook.
+#[tauri::command]
+fn save_png_to_photos(app: tauri::AppHandle, name: String, data: String) -> CmdResult<()> {
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data).map_err(|e| e.to_string())?;
+    let safe: String = name.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' }).collect();
+    let path = share_dir(&app)?.join(format!("{safe}.png"));
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    native_call(&app, "saveImage", serde_json::json!({ "path": path.to_string_lossy(), "mime": "image/png", "title": "" }))
+}
+
 #[derive(Serialize)]
 struct StagedBackup {
     path: String,
@@ -808,6 +867,18 @@ fn rest_android_rest(app: tauri::AppHandle, title: String, next: String, ends_at
 #[tauri::command]
 fn rest_android_clear(app: tauri::AppHandle) -> CmdResult<()> {
     native_call(&app, "clear", serde_json::json!({}))
+}
+
+/// Android weigh-in reminder: weekdays (0 = Sunday) at hour:minute. No days turns it off.
+#[tauri::command]
+fn weigh_in_reminder(app: tauri::AppHandle, days: Vec<u8>, hour: u8, minute: u8) -> CmdResult<()> {
+    native_call(&app, "weighInReminder", serde_json::json!({ "days": days, "hour": hour, "minute": minute }))
+}
+
+/// Android: landscape lock for fullscreen charts (false follows the device again).
+#[tauri::command]
+fn set_orientation(app: tauri::AppHandle, landscape: bool) -> CmdResult<()> {
+    native_call(&app, "orientation", serde_json::json!({ "landscape": landscape }))
 }
 
 // ---- Settings ---------------------------------------------------------------------------------------
@@ -937,7 +1008,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            preview_strong_workouts, import_strong_workouts, preview_bodyweight, import_bodyweight,
+            preview_strong_workouts, import_strong_workouts, preview_bodyweight, import_bodyweight, preview_measurements, import_measurements,
             name_review, set_name_mapping, remove_name_mapping, confirm_name_mapping, search_exercises,
             per_hand_suspects, set_session_load_mode,
             history_page, workout_detail, delete_workout, update_workout, rebuild_prs,
@@ -947,14 +1018,14 @@ pub fn run() {
             muscles, list_exercises, exercise_info, update_exercise, create_exercise, exercise_stats,
             muscle_sets, weekly_muscle_sets, last_trained, workouts_per_period, streak, workout_series, discomfort_points,
             list_templates, save_template, archive_template, template_from_workout, active_schedule, save_schedule,
-            suggestion, projected_weekly_sets, muscle_targets, set_muscle_target, current_goal, set_goal, list_phases, save_phase, delete_phase,
+            suggestion, projected_weekly_sets, muscle_targets, set_muscle_target, current_goal, set_goal, goal_history, progress_health, list_phases, save_phase, delete_phase,
             propose_from_history, apply_history_proposal, programs, install_program,
             weigh_ins, add_weigh_in, update_weigh_in, update_measurement, delete_weigh_in, inbody_fields, inbody_scans, save_inbody_scan, delete_inbody_scan,
             preview_inbody_csv, import_inbody_csv, diet_days, save_diet_day, energy_balance,
             body_parts, measurements, add_measurement, delete_measurement,
             export_file, backup_to, inspect_backup, restore_from, db_info, save_base64, copy_png,
-            rest_android_status, rest_android_rest, rest_android_clear,
-            share_export, share_backup, share_png, stage_backup,
+            rest_android_status, rest_android_rest, rest_android_clear, weigh_in_reminder, set_orientation,
+            share_export, share_backup, share_png, save_png_to_photos, stage_backup,
             counts, get_setting, set_setting,
         ])
         .run(tauri::generate_context!())

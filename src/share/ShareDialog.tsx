@@ -103,6 +103,14 @@ function ShareDialog({ spec, onClose }: { spec: ShareKind; onClose: () => void }
       setMsg(`Couldn't copy: ${e}`);
     }
   }
+  async function saveToPhotos() {
+    if (!png) return;
+    setMsg(null);
+    await api
+      .savePngToPhotos(`liftbook-${slug(title)}-${today()}`, png.split(",")[1])
+      .then(() => setMsg("Saved to Photos (Pictures/Liftbook)."))
+      .catch((e) => setMsg(String(e)));
+  }
   async function shareSheet() {
     if (!png) return;
     if (IS_ANDROID) {
@@ -124,6 +132,29 @@ function ShareDialog({ spec, onClose }: { spec: ShareKind; onClose: () => void }
       <div className="share-layout">
         <div className="share-preview">{png ? <img src={png} alt="Preview" /> : <div className="muted small">Rendering…</div>}</div>
         <div className="share-options">
+          <div className="row">
+            {/* Android's WebView has no navigator.share; the native share sheet is always there. */}
+            {(IS_ANDROID || canShare) && (
+              <button className="button primary" disabled={!png} onClick={shareSheet}>
+                Share…
+              </button>
+            )}
+            {IS_ANDROID && (
+              <button className="button" disabled={!png} onClick={saveToPhotos}>
+                Save to Photos
+              </button>
+            )}
+            {!IS_ANDROID && (
+              <>
+                <button className={canShare ? "button" : "button primary"} disabled={!png} onClick={saveFile}>
+                  Save PNG
+                </button>
+                <button className="button" disabled={!png} onClick={copy}>
+                  Copy
+                </button>
+              </>
+            )}
+          </div>
           <label>
             Title
             <input value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -151,24 +182,6 @@ function ShareDialog({ spec, onClose }: { spec: ShareKind; onClose: () => void }
           <label className="check">
             <input type="checkbox" checked={hide} onChange={(e) => setHide(e.target.checked)} /> Hide exact numbers
           </label>
-          <div className="row">
-            {canShare && (
-              <button className="button primary" disabled={!png} onClick={shareSheet}>
-                Share…
-              </button>
-            )}
-            {/* On Android "Share…" also covers saving (Files, Drive, Photos). */}
-            {!IS_ANDROID && (
-              <>
-                <button className={canShare ? "button" : "button primary"} disabled={!png} onClick={saveFile}>
-                  Save PNG
-                </button>
-                <button className="button" disabled={!png} onClick={copy}>
-                  Copy
-                </button>
-              </>
-            )}
-          </div>
           {msg && <p className="small success">{msg}</p>}
         </div>
       </div>

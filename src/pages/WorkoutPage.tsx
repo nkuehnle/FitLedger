@@ -82,7 +82,7 @@ export default function WorkoutPage({ id, mode }: { id: number; mode: "live" | "
   };
 
   return (
-    <div className="page narrow workout-page">
+    <div className="page workout-page">
       <header className="workout-head">
         <div className="workout-title-row">
           <input
@@ -125,30 +125,36 @@ export default function WorkoutPage({ id, mode }: { id: number; mode: "live" | "
 
       {error && <p className="error">{error}</p>}
 
-      {groups.map((g, gi) => (
-        <section key={gi} className={g.superset !== null ? "card superset-card superset-row" : "card"} data-group={g.superset ?? undefined}>
-          {g.superset !== null && (
-            <div className="superset-label small">
-              Superset · rounds of {g.items.map((_, i) => `${String.fromCharCode(65 + (g.superset! % 26))}${i + 1}`).join(" → ")}
-            </div>
-          )}
-          {g.items.map((e) => (
-            <ExerciseBlock
-              key={e.id}
-              e={e}
-              prev={prev.get(e.id)}
-              muscles={muscles}
-              live={mode === "live"}
-              onChanged={reload}
-              onError={setError}
-              onCompleted={(rest) => mode === "live" && rest > 0 && timer.start(rest, nextSetLabel(w, e.id))}
-              onSwap={() => setPicker({ kind: "swap", we: e })}
-              onSuperset={nextOf(e) ? () => run(() => api.reorderExercises(w.id, groupWithNext(w.exercises, e.id))) : undefined}
-              onUnsuperset={e.superset !== null ? () => run(() => api.reorderExercises(w.id, ungroup(w.exercises, e.id))) : undefined}
-            />
-          ))}
-        </section>
-      ))}
+      <div className="workout-groups">
+        {groups.map((g, gi) => (
+          <section
+            key={gi}
+            className={g.superset !== null ? "card superset-card superset-row" : "card"}
+            data-group={g.superset ?? undefined}
+          >
+            {g.superset !== null && (
+              <div className="superset-label small">
+                Superset · rounds of {g.items.map((_, i) => `${String.fromCharCode(65 + (g.superset! % 26))}${i + 1}`).join(" → ")}
+              </div>
+            )}
+            {g.items.map((e) => (
+              <ExerciseBlock
+                key={e.id}
+                e={e}
+                prev={prev.get(e.id)}
+                muscles={muscles}
+                live={mode === "live"}
+                onChanged={reload}
+                onError={setError}
+                onCompleted={(rest) => mode === "live" && rest > 0 && timer.start(rest, nextSetLabel(w, e.id))}
+                onSwap={() => setPicker({ kind: "swap", we: e })}
+                onSuperset={nextOf(e) ? () => run(() => api.reorderExercises(w.id, groupWithNext(w.exercises, e.id))) : undefined}
+                onUnsuperset={e.superset !== null ? () => run(() => api.reorderExercises(w.id, ungroup(w.exercises, e.id))) : undefined}
+              />
+            ))}
+          </section>
+        ))}
+      </div>
 
       <button className="button wide-btn" onClick={() => setPicker({ kind: "add" })}>
         + Add exercise
@@ -304,7 +310,7 @@ function ExerciseBlock({
   return (
     <div className="exercise-live">
       <header className="exercise-live-head">
-        <div>
+        <div className="exercise-title">
           <h3>{e.name}</h3>
           <div className="chips">
             {target && <span className="chip strong">{target}</span>}

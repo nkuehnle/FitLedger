@@ -8,6 +8,7 @@ import PlanPage from "./pages/PlanPage";
 import ReviewPage from "./pages/ReviewPage";
 import SettingsPage from "./pages/SettingsPage";
 import StatsPage from "./pages/StatsPage";
+import { loadWeighInPlan, syncWeighInReminder } from "./weighIn";
 import WorkoutPage from "./pages/WorkoutPage";
 
 export type Theme = "system" | "light" | "dark";
@@ -83,6 +84,7 @@ export default function App() {
   useEffect(() => {
     api.getSetting("weight_unit").then((u) => u && setUnitState(u as WeightUnit));
     api.getSetting("theme").then((t) => t && setThemeState(t as Theme));
+    loadWeighInPlan().then(syncWeighInReminder);
   }, []);
   useEffect(() => {
     api.activeWorkout().then(setActive);

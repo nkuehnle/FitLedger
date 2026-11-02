@@ -221,7 +221,7 @@ pub fn month_start(d: NaiveDate) -> NaiveDate {
 }
 
 /// Muscles of each exercise: exercise id -> [(muscle id, is_primary)].
-type MuscleMap = HashMap<i64, Vec<(String, bool)>>;
+pub(crate) type MuscleMap = HashMap<i64, Vec<(String, bool)>>;
 
 impl Db {
     pub fn formula(&self) -> Result<Formula> {
@@ -279,7 +279,7 @@ impl Db {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
-    fn muscle_map(&self) -> Result<MuscleMap> {
+    pub(crate) fn muscle_map(&self) -> Result<MuscleMap> {
         let mut map: MuscleMap = HashMap::new();
         let mut stmt = self.conn().prepare_cached("SELECT exercise_id, muscle_id, role FROM exercise_muscle")?;
         for row in stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?)))? {
