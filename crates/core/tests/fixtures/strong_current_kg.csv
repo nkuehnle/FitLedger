@@ -1,0 +1,13 @@
+Date,Timezone,Workout,Workout Duration (s),Group,Exercise,Set,Weight (kg),Reps,RPE,Distance (km),Duration (s),Rest Timer (s),Workout Notes,Exercise Notes
+2025-03-01 09:00:00,Europe/Berlin (+01:00),Push Day,3600,,Bench Press (Barbell),W,40,10,,,,60,Felt good,3x5
+2025-03-01 09:00:00,Europe/Berlin (+01:00),Push Day,3600,,Bench Press (Barbell),1,80,5,8,,,120,Felt good,3x5
+2025-03-01 09:00:00,Europe/Berlin (+01:00),Push Day,3600,,Bench Press (Barbell),2,80,5,8.5,,,120,Felt good,3x5
+2025-03-01 09:00:00,Europe/Berlin (+01:00),Push Day,3600,,Bench Press (Barbell),F,80,3,10,,,120,Felt good,3x5
+2025-03-01 09:00:00,Europe/Berlin (+01:00),Push Day,3600,B,Lateral Raise (Dumbbell),1,20,12,,,,0,Felt good,
+2025-03-01 09:00:00,Europe/Berlin (+01:00),Push Day,3600,B,Lateral Raise (Dumbbell),2,20,12,,,,0,Felt good,
+2025-03-01 09:00:00,Europe/Berlin (+01:00),Push Day,3600,B,Triceps Pushdown (Cable - Straight Bar),1,30,12,,,,90,Felt good,Rope
+2025-03-01 09:00:00,Europe/Berlin (+01:00),Push Day,3600,B,Triceps Pushdown (Cable - Straight Bar),2,30,10,,,,90,Felt good,Rope
+2025-03-01 09:00:00,Europe/Berlin (+01:00),Push Day,3600,B,Triceps Pushdown (Cable - Straight Bar),D,20,8,,,,90,Felt good,Rope
+2025-03-01 09:00:00,Europe/Berlin (+01:00),Push Day,3600,,Pull Up,1,0,10,,,,90,Felt good,
+2025-03-01 09:00:00,Europe/Berlin (+01:00),Push Day,3600,,Pull Up,2,10,6,,,,90,Felt good,
+2025-03-03 18:30:00,Europe/Berlin (+01:00),Cardio,1500,,Running (Treadmill),1,,,,5,1500,,,

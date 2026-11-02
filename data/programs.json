@@ -1,0 +1,117 @@
+{
+  "programs": [
+    {
+      "id": "full-body-3",
+      "name": "Full Body (3 days)",
+      "description": "Three full-body sessions a week. Good for beginners or busy weeks.",
+      "days": ["Full Body A", null, "Full Body B", null, "Full Body A", null, null],
+      "templates": {
+        "Full Body A": [
+          ["squat-barbell", 3, 5, 8], ["bench-press-barbell", 3, 5, 8], ["bent-over-row-barbell", 3, 8, 10],
+          ["romanian-deadlift-dumbbell", 3, 8, 10], ["lateral-raise-dumbbell", 2, 12, 15], ["plank", 2, null, null]
+        ],
+        "Full Body B": [
+          ["deadlift-barbell", 3, 5, 6], ["overhead-press-barbell", 3, 6, 8], ["lat-pulldown-cable", 3, 8, 12],
+          ["leg-press", 3, 10, 12], ["bicep-curl-dumbbell", 2, 10, 12], ["triceps-pushdown-rope", 2, 10, 12]
+        ]
+      }
+    },
+    {
+      "id": "upper-lower-4",
+      "name": "Upper / Lower (4 days)",
+      "description": "Two upper and two lower sessions a week.",
+      "days": ["Upper A", "Lower A", null, "Upper B", "Lower B", null, null],
+      "templates": {
+        "Upper A": [
+          ["bench-press-barbell", 4, 6, 8], ["bent-over-row-barbell", 4, 6, 8], ["overhead-press-dumbbell", 3, 8, 10],
+          ["lat-pulldown-cable", 3, 8, 12], ["bicep-curl-dumbbell", 3, 10, 12, "s1"], ["triceps-pushdown-rope", 3, 10, 12, "s1"]
+        ],
+        "Lower A": [
+          ["squat-barbell", 4, 5, 8], ["romanian-deadlift-barbell", 3, 8, 10], ["leg-extension-machine", 3, 10, 15, "s1"],
+          ["lying-leg-curl-machine", 3, 10, 15, "s1"], ["standing-calf-raise-machine", 4, 10, 15], ["hanging-leg-raise", 3, 10, 15]
+        ],
+        "Upper B": [
+          ["incline-bench-press-dumbbell", 4, 8, 10], ["seated-row-cable", 4, 8, 12], ["lateral-raise-dumbbell", 3, 12, 15, "s1"],
+          ["face-pull-cable", 3, 12, 15, "s1"], ["incline-curl-dumbbell", 3, 10, 12, "s2"], ["overhead-triceps-extension-cable", 3, 10, 12, "s2"]
+        ],
+        "Lower B": [
+          ["deadlift-barbell", 3, 5, 6], ["leg-press", 3, 10, 12], ["bulgarian-split-squat-dumbbell", 3, 8, 12],
+          ["seated-leg-curl-machine", 3, 10, 15], ["seated-calf-raise-machine", 4, 12, 15], ["cable-crunch", 3, 12, 15]
+        ]
+      }
+    },
+    {
+      "id": "torso-limb-4",
+      "name": "Torso / Limb (4 days)",
+      "description": "Torso days train chest, back and shoulders; limb days train arms and legs.",
+      "days": ["Limb A", "Torso A", null, "Limb B", "Torso B", null, null],
+      "templates": {
+        "Torso A": [
+          ["incline-bench-press-dumbbell", 3, 8, 10, "s1"], ["chest-supported-row-dumbbell", 3, 8, 10, "s1"],
+          ["lat-pulldown-cable", 3, 10, 12], ["lateral-raise-cable", 3, 10, 12, "s2"], ["face-pull-cable", 3, 12, 15, "s2"],
+          ["cable-fly-low-to-high", 3, 10, 12, "s3"], ["cable-woodchop", 3, 12, 15, "s3"]
+        ],
+        "Limb A": [
+          ["squat-barbell", 3, 6, 8], ["romanian-deadlift-dumbbell", 3, 8, 10], ["leg-extension-machine", 3, 10, 12, "s1"],
+          ["lying-leg-curl-machine", 3, 10, 12, "s1"], ["incline-curl-dumbbell", 3, 10, 12, "s2"],
+          ["triceps-pushdown-rope", 3, 10, 12, "s2"], ["standing-calf-raise-smith-machine", 3, 10, 15]
+        ],
+        "Torso B": [
+          ["chest-press-machine", 3, 8, 12], ["seated-wide-grip-row-cable", 3, 8, 12], ["seated-overhead-press-dumbbell", 3, 8, 12, "s1"],
+          ["shrug-dumbbell", 3, 10, 15, "s1"], ["single-arm-lat-pulldown-cable", 3, 10, 12, "s2"], ["hanging-leg-raise", 3, 10, 15, "s2"],
+          ["reverse-fly-machine", 3, 12, 15, "s3"], ["pec-deck-machine", 3, 12, 15, "s3"]
+        ],
+        "Limb B": [
+          ["deadlift-barbell", 3, 6, 8], ["leg-press", 3, 10, 12], ["bicep-curl-dumbbell", 3, 10, 12, "s1"],
+          ["overhead-triceps-extension-cable", 3, 10, 12, "s1"], ["hip-adductor-machine", 3, 12, 20], ["seated-calf-raise-machine", 3, 12, 15],
+          ["reverse-curl-barbell", 2, 12, 15]
+        ]
+      }
+    },
+    {
+      "id": "phul-4",
+      "name": "PHUL (4 days)",
+      "description": "Power Hypertrophy Upper Lower: two heavy days, two volume days.",
+      "days": ["Upper Power", "Lower Power", null, "Upper Hypertrophy", "Lower Hypertrophy", null, null],
+      "templates": {
+        "Upper Power": [
+          ["bench-press-barbell", 4, 3, 5], ["bent-over-row-barbell", 4, 3, 5], ["incline-bench-press-dumbbell", 3, 6, 10],
+          ["lat-pulldown-cable", 3, 6, 10], ["overhead-press-barbell", 3, 5, 8], ["bicep-curl-barbell", 3, 6, 10], ["skullcrusher-barbell", 3, 6, 10]
+        ],
+        "Lower Power": [
+          ["squat-barbell", 4, 3, 5], ["deadlift-barbell", 3, 3, 5], ["leg-press", 4, 10, 15], ["lying-leg-curl-machine", 4, 6, 10],
+          ["standing-calf-raise-machine", 4, 6, 10]
+        ],
+        "Upper Hypertrophy": [
+          ["incline-bench-press-barbell", 4, 8, 12], ["chest-fly-dumbbell", 4, 8, 12], ["seated-row-cable", 4, 8, 12],
+          ["bent-over-one-arm-row-dumbbell", 4, 8, 12], ["lateral-raise-dumbbell", 4, 8, 12], ["incline-curl-dumbbell", 4, 8, 12, "s1"],
+          ["triceps-pushdown-rope", 4, 8, 12, "s1"]
+        ],
+        "Lower Hypertrophy": [
+          ["front-squat-barbell", 4, 8, 12], ["lunge-barbell", 4, 8, 12], ["leg-extension-machine", 4, 10, 15],
+          ["seated-leg-curl-machine", 4, 10, 15], ["seated-calf-raise-machine", 4, 8, 12], ["standing-calf-raise-machine", 4, 8, 12]
+        ]
+      }
+    },
+    {
+      "id": "ppl-6",
+      "name": "Push / Pull / Legs (6 days)",
+      "description": "Each muscle twice a week across six sessions.",
+      "days": ["Push", "Pull", "Legs", "Push", "Pull", "Legs", null],
+      "templates": {
+        "Push": [
+          ["bench-press-barbell", 4, 6, 8], ["overhead-press-dumbbell", 3, 8, 10], ["incline-bench-press-dumbbell", 3, 8, 12],
+          ["lateral-raise-dumbbell", 3, 12, 15], ["triceps-pushdown-rope", 3, 10, 12, "s1"], ["overhead-triceps-extension-cable", 3, 10, 12, "s1"]
+        ],
+        "Pull": [
+          ["deadlift-barbell", 3, 5, 6], ["pull-up", 3, 6, 10], ["seated-row-cable", 3, 8, 12], ["face-pull-cable", 3, 12, 15],
+          ["hammer-curl-dumbbell", 3, 10, 12, "s1"], ["incline-curl-dumbbell", 3, 10, 12, "s1"]
+        ],
+        "Legs": [
+          ["squat-barbell", 4, 6, 8], ["romanian-deadlift-barbell", 3, 8, 10], ["leg-press", 3, 10, 12],
+          ["leg-extension-machine", 3, 12, 15, "s1"], ["lying-leg-curl-machine", 3, 12, 15, "s1"], ["standing-calf-raise-machine", 4, 10, 15]
+        ]
+      }
+    }
+  ]
+}

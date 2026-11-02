@@ -1,0 +1,290 @@
+# Liftbook curated exercise library.
+# One exercise per line: name | equipment | pattern | kind | primary muscles | secondary muscles | aliases
+# Muscle ids come from muscles.json. Lists are comma-separated; aliases are separated by ";".
+# equipment: barbell dumbbell cable machine smith_machine landmine kettlebell band bodyweight cardio ez_bar trap_bar plate medicine_ball stability_ball other
+# pattern:   horizontal_push vertical_push horizontal_pull vertical_pull squat hinge lunge isolation core carry cardio olympic
+# kind:      weight_reps bodyweight_reps assisted_bodyweight duration distance_duration weight_distance
+
+# ---- Chest: presses
+Bench Press (Barbell)|barbell|horizontal_push|weight_reps|lower_chest|upper_chest,front_delts,triceps|Flat Bench Press;Barbell Bench Press
+Close-Grip Bench Press (Barbell)|barbell|horizontal_push|weight_reps|triceps,lower_chest|front_delts,upper_chest|CGBP
+Incline Bench Press (Barbell)|barbell|horizontal_push|weight_reps|upper_chest|front_delts,triceps,lower_chest|Incline Barbell Press
+Decline Bench Press (Barbell)|barbell|horizontal_push|weight_reps|lower_chest|triceps,front_delts|
+Floor Press (Barbell)|barbell|horizontal_push|weight_reps|lower_chest,triceps|front_delts|
+Bench Press (Dumbbell)|dumbbell|horizontal_push|weight_reps|lower_chest|upper_chest,front_delts,triceps|Dumbbell Bench Press;Flat Dumbbell Press
+Incline Bench Press (Dumbbell)|dumbbell|horizontal_push|weight_reps|upper_chest|front_delts,triceps,lower_chest|Incline Dumbbell Press
+Decline Bench Press (Dumbbell)|dumbbell|horizontal_push|weight_reps|lower_chest|triceps,front_delts|
+Squeeze Press (Dumbbell)|dumbbell|horizontal_push|weight_reps|lower_chest|upper_chest,triceps,front_delts|Squeeze Press;Crush Press
+Bench Press (Smith Machine)|smith_machine|horizontal_push|weight_reps|lower_chest|upper_chest,front_delts,triceps|Smith Bench Press
+Incline Bench Press (Smith Machine)|smith_machine|horizontal_push|weight_reps|upper_chest|front_delts,triceps,lower_chest|Smith Incline Press
+Bench Press (Cable)|cable|horizontal_push|weight_reps|lower_chest|upper_chest,front_delts,triceps|Cable Chest Press
+Chest Press (Machine)|machine|horizontal_push|weight_reps|lower_chest|upper_chest,front_delts,triceps|Machine Chest Press;Seated Chest Press
+Incline Chest Press (Machine)|machine|horizontal_push|weight_reps|upper_chest|front_delts,triceps,lower_chest|Incline Machine Press
+Decline Chest Press (Machine)|machine|horizontal_push|weight_reps|lower_chest|triceps,front_delts|
+Landmine Press|landmine|horizontal_push|weight_reps|upper_chest,front_delts|triceps,obliques|Landmine Chest Press
+Push Up|bodyweight|horizontal_push|bodyweight_reps|lower_chest|front_delts,triceps,abs|Pushup;Press Up
+Incline Push Up|bodyweight|horizontal_push|bodyweight_reps|lower_chest|front_delts,triceps|
+Decline Push Up|bodyweight|horizontal_push|bodyweight_reps|upper_chest|front_delts,triceps|Feet-Elevated Push Up
+Chest Dip|bodyweight|horizontal_push|bodyweight_reps|lower_chest,triceps|front_delts|Dip;Dips;Weighted Dip
+Assisted Chest Dip (Machine)|machine|horizontal_push|assisted_bodyweight|lower_chest,triceps|front_delts|Assisted Dip
+
+# ---- Chest: flyes
+Chest Fly (Dumbbell)|dumbbell|isolation|weight_reps|lower_chest|upper_chest,front_delts|Dumbbell Fly;Dumbbell Flye
+Incline Chest Fly (Dumbbell)|dumbbell|isolation|weight_reps|upper_chest|lower_chest,front_delts|Incline Dumbbell Fly
+Pec Deck (Machine)|machine|isolation|weight_reps|lower_chest|upper_chest,front_delts|Pec Deck;Machine Fly;Chest Fly (Machine)
+Cable Crossover|cable|isolation|weight_reps|lower_chest|upper_chest,front_delts|Cable Fly;Standing Cable Fly
+Cable Fly (Low to High)|cable|isolation|weight_reps|upper_chest|front_delts,lower_chest|Low-To-High Cable Fly;Low Cable Fly
+Cable Fly (High to Low)|cable|isolation|weight_reps|lower_chest|upper_chest|High-To-Low Cable Fly;High Cable Fly
+Seated Cable Fly|cable|isolation|weight_reps|lower_chest|upper_chest,front_delts|
+Pullover (Dumbbell)|dumbbell|isolation|weight_reps|lats,lower_chest|triceps|Dumbbell Pullover
+
+# ---- Shoulders
+Overhead Press (Barbell)|barbell|vertical_push|weight_reps|front_delts|side_delts,triceps,upper_chest|OHP;Military Press;Standing Press
+Seated Overhead Press (Barbell)|barbell|vertical_push|weight_reps|front_delts|side_delts,triceps|Seated Military Press
+Push Press (Barbell)|barbell|vertical_push|weight_reps|front_delts|side_delts,triceps,quads,glutes|Push Press
+Overhead Press (Dumbbell)|dumbbell|vertical_push|weight_reps|front_delts|side_delts,triceps|Standing Dumbbell Press
+Seated Overhead Press (Dumbbell)|dumbbell|vertical_push|weight_reps|front_delts|side_delts,triceps|Seated Dumbbell Shoulder Press;Dumbbell Shoulder Press
+Arnold Press (Dumbbell)|dumbbell|vertical_push|weight_reps|front_delts|side_delts,triceps|Arnold Press
+Overhead Press (Smith Machine)|smith_machine|vertical_push|weight_reps|front_delts|side_delts,triceps|Smith Shoulder Press
+Shoulder Press (Machine)|machine|vertical_push|weight_reps|front_delts|side_delts,triceps|Machine Shoulder Press
+Overhead Press (Kettlebell)|kettlebell|vertical_push|weight_reps|front_delts|side_delts,triceps|Kettlebell Press
+Landmine Shoulder Press (Single Arm)|landmine|vertical_push|weight_reps|front_delts|upper_chest,triceps,obliques|Single-Arm Landmine Press
+Pike Push Up|bodyweight|vertical_push|bodyweight_reps|front_delts|triceps,side_delts|
+Handstand Push Up|bodyweight|vertical_push|bodyweight_reps|front_delts|triceps,side_delts,traps|HSPU
+Lateral Raise (Dumbbell)|dumbbell|isolation|weight_reps|side_delts|traps|Side Raise;Dumbbell Lateral Raise
+Lateral Raise (Cable)|cable|isolation|weight_reps|side_delts|traps|Cable Lateral Raise
+Lateral Raise (Machine)|machine|isolation|weight_reps|side_delts|traps|Machine Lateral Raise
+Lateral Raise (Band)|band|isolation|weight_reps|side_delts|traps|
+Seated Lateral Raise (Dumbbell)|dumbbell|isolation|weight_reps|side_delts||
+Upright Row (Barbell)|barbell|vertical_pull|weight_reps|side_delts,traps|front_delts,biceps|
+Upright Row (Cable)|cable|vertical_pull|weight_reps|side_delts,traps|front_delts,biceps|
+Upright Row (Dumbbell)|dumbbell|vertical_pull|weight_reps|side_delts,traps|front_delts,biceps|
+Front Raise (Dumbbell)|dumbbell|isolation|weight_reps|front_delts|upper_chest,side_delts|
+Front Raise (Plate)|plate|isolation|weight_reps|front_delts|upper_chest,side_delts|Plate Raise
+Front Raise (Cable)|cable|isolation|weight_reps|front_delts|upper_chest,side_delts|
+Reverse Fly (Dumbbell)|dumbbell|isolation|weight_reps|rear_delts|upper_back,traps|Rear Delt Fly;Bent Over Reverse Fly
+Reverse Fly (Machine)|machine|isolation|weight_reps|rear_delts|upper_back,traps|Reverse Pec Deck;Rear Delt Machine
+Reverse Fly (Cable)|cable|isolation|weight_reps|rear_delts|upper_back|Cable Rear Delt Fly
+Face Pull (Cable)|cable|horizontal_pull|weight_reps|rear_delts|upper_back,traps,side_delts|Face Pull;Rope Face Pull
+Face Pull (Band)|band|horizontal_pull|weight_reps|rear_delts|upper_back,traps|Band Face Pull
+Band Pull Apart|band|isolation|weight_reps|rear_delts|upper_back,traps|Pull Apart
+
+# ---- Back: vertical pulls
+Pull Up|bodyweight|vertical_pull|bodyweight_reps|lats|upper_back,biceps,rear_delts,forearm_flexors|Pullup;Weighted Pull Up
+Chin Up|bodyweight|vertical_pull|bodyweight_reps|lats,biceps|upper_back,forearm_flexors|Chinup;Weighted Chin Up
+Neutral-Grip Pull Up|bodyweight|vertical_pull|bodyweight_reps|lats|biceps,upper_back,forearm_flexors|Hammer Grip Pull Up
+Assisted Pull Up (Machine)|machine|vertical_pull|assisted_bodyweight|lats|upper_back,biceps|Assisted Pull Up;Assisted Chin Up
+Lat Pulldown (Cable)|cable|vertical_pull|weight_reps|lats|upper_back,biceps,rear_delts|Lat Pulldown;Wide-Grip Lat Pulldown
+Close-Grip Lat Pulldown (Cable)|cable|vertical_pull|weight_reps|lats|biceps,upper_back|Close-Grip Pulldown;V-Bar Pulldown
+Reverse-Grip Lat Pulldown (Cable)|cable|vertical_pull|weight_reps|lats,biceps|upper_back|Underhand Pulldown
+Single-Arm Lat Pulldown (Cable)|cable|vertical_pull|weight_reps|lats|upper_back,biceps|Lat Pulldown (Single Arm);One Arm Pulldown
+Lat Pulldown (Machine)|machine|vertical_pull|weight_reps|lats|upper_back,biceps|Machine Pulldown
+Straight-Arm Pulldown (Cable)|cable|isolation|weight_reps|lats|triceps,rear_delts|Straight Arm Pulldown;Cable Pullover
+
+# ---- Back: rows
+Bent Over Row (Barbell)|barbell|horizontal_pull|weight_reps|upper_back,lats|rear_delts,biceps,lower_back,traps|Barbell Row;Bent-Over Row
+Pendlay Row (Barbell)|barbell|horizontal_pull|weight_reps|upper_back,lats|rear_delts,biceps,lower_back|Pendlay Row
+Bent Over Row (Dumbbell)|dumbbell|horizontal_pull|weight_reps|upper_back,lats|rear_delts,biceps,lower_back|Dumbbell Row
+Bent Over One Arm Row (Dumbbell)|dumbbell|horizontal_pull|weight_reps|lats,upper_back|rear_delts,biceps|One Arm Dumbbell Row;Single-Arm Dumbbell Row
+Chest-Supported Row (Dumbbell)|dumbbell|horizontal_pull|weight_reps|upper_back,lats|rear_delts,biceps|Incline Dumbbell Row;Chest Supported Row (Dumbell);Chest-Supported Row (Dumbell)
+T-Bar Row|landmine|horizontal_pull|weight_reps|upper_back,lats|rear_delts,biceps,lower_back|T Bar Row;Landmine Row
+Meadows Row|landmine|horizontal_pull|weight_reps|lats,upper_back|rear_delts,biceps|
+Seated Row (Cable)|cable|horizontal_pull|weight_reps|upper_back,lats|rear_delts,biceps|Seated Cable Row;Cable Row
+Seated Wide-Grip Row (Cable)|cable|horizontal_pull|weight_reps|upper_back|rear_delts,lats,biceps,traps|Wide-Grip Cable Row
+Single-Arm Row (Cable)|cable|horizontal_pull|weight_reps|lats,upper_back|rear_delts,biceps|One Arm Cable Row
+Seated Row (Machine)|machine|horizontal_pull|weight_reps|upper_back,lats|rear_delts,biceps|Machine Row
+Chest-Supported Row (Machine)|machine|horizontal_pull|weight_reps|upper_back,lats|rear_delts,biceps|Machine Chest Supported Row
+Row (Smith Machine)|smith_machine|horizontal_pull|weight_reps|upper_back,lats|rear_delts,biceps|Smith Row
+Inverted Row|bodyweight|horizontal_pull|bodyweight_reps|upper_back,lats|rear_delts,biceps|Bodyweight Row;Australian Pull Up
+Seal Row (Barbell)|barbell|horizontal_pull|weight_reps|upper_back,lats|rear_delts,biceps|Seal Row
+
+# ---- Back: traps and lower back
+Shrug (Barbell)|barbell|isolation|weight_reps|traps|forearm_flexors|Barbell Shrug
+Shrug (Dumbbell)|dumbbell|isolation|weight_reps|traps|forearm_flexors|Dumbbell Shrug
+Shrug (Smith Machine)|smith_machine|isolation|weight_reps|traps||Smith Shrug
+Shrug (Machine)|machine|isolation|weight_reps|traps||Machine Shrug
+Shrug (Trap Bar)|trap_bar|isolation|weight_reps|traps|forearm_flexors|
+Back Extension|bodyweight|hinge|bodyweight_reps|lower_back|glutes,hamstrings|Hyperextension;45 Degree Back Extension
+Back Extension (Machine)|machine|hinge|weight_reps|lower_back|glutes,hamstrings|
+Good Morning (Barbell)|barbell|hinge|weight_reps|hamstrings,lower_back|glutes|Good Morning
+Superman|bodyweight|core|bodyweight_reps|lower_back|glutes|
+
+# ---- Hinges
+Deadlift (Barbell)|barbell|hinge|weight_reps|glutes,hamstrings,lower_back|quads,traps,upper_back,lats,forearm_flexors|Deadlift;Conventional Deadlift
+Sumo Deadlift (Barbell)|barbell|hinge|weight_reps|glutes,adductors,quads|hamstrings,lower_back,traps,forearm_flexors|Sumo Deadlift
+Trap Bar Deadlift|trap_bar|hinge|weight_reps|glutes,quads,hamstrings|lower_back,traps,forearm_flexors|Hex Bar Deadlift
+Romanian Deadlift (Barbell)|barbell|hinge|weight_reps|hamstrings,glutes|lower_back,forearm_flexors|RDL;Barbell RDL
+Romanian Deadlift (Dumbbell)|dumbbell|hinge|weight_reps|hamstrings,glutes|lower_back,forearm_flexors|Dumbbell RDL
+Stiff-Leg Deadlift (Barbell)|barbell|hinge|weight_reps|hamstrings,glutes|lower_back|Stiff Leg Deadlift;SLDL
+Single-Leg Romanian Deadlift (Dumbbell)|dumbbell|hinge|weight_reps|hamstrings,glutes|lower_back,abductors|Single Leg RDL;SL RDL
+Single-Leg Romanian Deadlift (Landmine)|landmine|hinge|weight_reps|hamstrings,glutes|lower_back,abductors|Landmine SL RDL;Landmine Single Leg RDL
+Deadlift (Smith Machine)|smith_machine|hinge|weight_reps|glutes,hamstrings|lower_back,quads|
+Romanian Deadlift (Kettlebell)|kettlebell|hinge|weight_reps|hamstrings,glutes|lower_back|
+Kettlebell Swing|kettlebell|hinge|weight_reps|glutes,hamstrings|lower_back,front_delts,abs|Swing;Russian Swing
+Hip Thrust (Barbell)|barbell|hinge|weight_reps|glutes|hamstrings,quads|Barbell Hip Thrust
+Hip Thrust (Machine)|machine|hinge|weight_reps|glutes|hamstrings|
+Hip Thrust (Smith Machine)|smith_machine|hinge|weight_reps|glutes|hamstrings|
+Glute Bridge|bodyweight|hinge|bodyweight_reps|glutes|hamstrings|Bridge
+Glute Bridge (Barbell)|barbell|hinge|weight_reps|glutes|hamstrings|
+Cable Pull Through|cable|hinge|weight_reps|glutes,hamstrings|lower_back|Pull Through
+Glute Kickback (Cable)|cable|isolation|weight_reps|glutes|hamstrings|Cable Kickback
+Glute Kickback (Machine)|machine|isolation|weight_reps|glutes|hamstrings|
+
+# ---- Squats and leg press
+Squat (Barbell)|barbell|squat|weight_reps|quads,glutes|adductors,lower_back,hamstrings|Back Squat;Barbell Squat
+Front Squat (Barbell)|barbell|squat|weight_reps|quads|glutes,adductors,upper_back,abs|Front Squat
+Box Squat (Barbell)|barbell|squat|weight_reps|quads,glutes|hamstrings,adductors,lower_back|
+Pause Squat (Barbell)|barbell|squat|weight_reps|quads,glutes|adductors,lower_back|
+Squat (Smith Machine)|smith_machine|squat|weight_reps|quads,glutes|adductors|Smith Squat
+Goblet Squat (Dumbbell)|dumbbell|squat|weight_reps|quads,glutes|adductors,abs|Goblet Squat
+Goblet Squat (Kettlebell)|kettlebell|squat|weight_reps|quads,glutes|adductors,abs|
+Hack Squat (Machine)|machine|squat|weight_reps|quads|glutes,adductors|Hack Squat
+Pendulum Squat (Machine)|machine|squat|weight_reps|quads|glutes,adductors|Pendulum Squat
+Belt Squat (Machine)|machine|squat|weight_reps|quads,glutes|adductors|Belt Squat
+Leg Press|machine|squat|weight_reps|quads|glutes,adductors,hamstrings|Leg Press (Machine);45 Degree Leg Press
+Single-Leg Leg Press|machine|squat|weight_reps|quads|glutes,adductors|
+Landmine Squat|landmine|squat|weight_reps|quads,glutes|adductors,abs|
+Bodyweight Squat|bodyweight|squat|bodyweight_reps|quads,glutes|adductors|Air Squat
+Pistol Squat|bodyweight|squat|bodyweight_reps|quads,glutes|adductors,abs|
+Sissy Squat|bodyweight|isolation|bodyweight_reps|quads||
+Wall Sit|bodyweight|squat|duration|quads|glutes|
+
+# ---- Lunges and single-leg
+Lunge (Barbell)|barbell|lunge|weight_reps|quads,glutes|adductors,hamstrings|Barbell Lunge
+Lunge (Dumbbell)|dumbbell|lunge|weight_reps|quads,glutes|adductors,hamstrings|Dumbbell Lunge
+Walking Lunge (Dumbbell)|dumbbell|lunge|weight_reps|quads,glutes|adductors,hamstrings|Walking Lunge
+Reverse Lunge (Dumbbell)|dumbbell|lunge|weight_reps|glutes,quads|adductors,hamstrings|
+Lunge (Bodyweight)|bodyweight|lunge|bodyweight_reps|quads,glutes|adductors|Lunge
+Bulgarian Split Squat (Dumbbell)|dumbbell|lunge|weight_reps|quads,glutes|adductors,hamstrings|Bulgarian Split Squat;BSS;Rear Foot Elevated Split Squat
+Bulgarian Split Squat (Barbell)|barbell|lunge|weight_reps|quads,glutes|adductors,hamstrings|
+Split Squat (Smith Machine)|smith_machine|lunge|weight_reps|quads,glutes|adductors|
+Step Up (Dumbbell)|dumbbell|lunge|weight_reps|quads,glutes|hamstrings,adductors|Step Up
+
+# ---- Leg isolation
+Leg Extension (Machine)|machine|isolation|weight_reps|quads||Leg Extension
+Single-Leg Extension (Machine)|machine|isolation|weight_reps|quads||
+Lying Leg Curl (Machine)|machine|isolation|weight_reps|hamstrings|calves|Lying Leg Curl
+Seated Leg Curl (Machine)|machine|isolation|weight_reps|hamstrings|calves|Seated Leg Curl
+Standing Leg Curl (Machine)|machine|isolation|weight_reps|hamstrings|calves|
+Nordic Hamstring Curl|bodyweight|isolation|bodyweight_reps|hamstrings|calves|Nordic Curl
+Stability Ball Leg Curl|stability_ball|isolation|bodyweight_reps|hamstrings|glutes,calves|Swiss Ball Leg Curl
+Hip Adductor (Machine)|machine|isolation|weight_reps|adductors||Adductor Machine;Hip Adduction
+Hip Abductor (Machine)|machine|isolation|weight_reps|abductors|glutes|Abductor Machine;Hip Abduction
+Cable Hip Adduction|cable|isolation|weight_reps|adductors||
+Cable Hip Abduction|cable|isolation|weight_reps|abductors|glutes|
+Copenhagen Plank|bodyweight|core|duration|adductors|obliques|
+Standing Calf Raise (Machine)|machine|isolation|weight_reps|calves||Standing Calf Raise
+Standing Calf Raise (Smith Machine)|smith_machine|isolation|weight_reps|calves||Smith Calf Raise
+Standing Calf Raise (Barbell)|barbell|isolation|weight_reps|calves||
+Standing Calf Raise (Dumbbell)|dumbbell|isolation|weight_reps|calves||Single-Leg Calf Raise
+Seated Calf Raise (Machine)|machine|isolation|weight_reps|calves||Seated Calf Raise;Seated Calf Raise (Plate Loaded)
+Calf Press on Leg Press|machine|isolation|weight_reps|calves||Leg Press Calf Raise;Calf Press
+Calf Raise (Bodyweight)|bodyweight|isolation|bodyweight_reps|calves||
+Tibialis Raise|bodyweight|isolation|bodyweight_reps|calves||Tib Raise
+
+# ---- Biceps
+Bicep Curl (Barbell)|barbell|isolation|weight_reps|biceps|forearm_flexors|Barbell Curl
+Bicep Curl (EZ Bar)|ez_bar|isolation|weight_reps|biceps|forearm_flexors|EZ Bar Curl
+Bicep Curl (Dumbbell)|dumbbell|isolation|weight_reps|biceps|forearm_flexors|Dumbbell Curl
+Bicep Curl (Cable)|cable|isolation|weight_reps|biceps|forearm_flexors|Cable Curl
+Bicep Curl (Machine)|machine|isolation|weight_reps|biceps||Machine Curl
+Bicep Curl (Band)|band|isolation|weight_reps|biceps|forearm_flexors|
+Hammer Curl (Dumbbell)|dumbbell|isolation|weight_reps|biceps,forearm_extensors||Hammer Curl
+Hammer Curl (Cable)|cable|isolation|weight_reps|biceps,forearm_extensors||Rope Hammer Curl
+Incline Curl (Dumbbell)|dumbbell|isolation|weight_reps|biceps|forearm_flexors|Incline Dumbbell Curl
+Preacher Curl (Barbell)|ez_bar|isolation|weight_reps|biceps||EZ Bar Preacher Curl
+Preacher Curl (Dumbbell)|dumbbell|isolation|weight_reps|biceps||
+Preacher Curl (Machine)|machine|isolation|weight_reps|biceps||Machine Preacher Curl
+Concentration Curl (Dumbbell)|dumbbell|isolation|weight_reps|biceps||Concentration Curl
+Spider Curl (Dumbbell)|dumbbell|isolation|weight_reps|biceps||
+Bayesian Curl (Cable)|cable|isolation|weight_reps|biceps||Behind-the-Body Cable Curl
+
+# ---- Triceps
+Triceps Pushdown (Rope)|cable|isolation|weight_reps|triceps||Rope Pushdown;Rope Triceps Pushdown
+Triceps Pushdown (Straight Bar)|cable|isolation|weight_reps|triceps||Triceps Pushdown (Cable - Straight Bar);Straight Bar Pushdown
+Triceps Pushdown (V-Bar)|cable|isolation|weight_reps|triceps||V-Bar Pushdown
+Single-Arm Triceps Pushdown (Cable)|cable|isolation|weight_reps|triceps||
+Overhead Triceps Extension (Cable)|cable|isolation|weight_reps|triceps||Cable Overhead Extension;Overhead Rope Extension;Triceps Extension (Cable)
+Overhead Triceps Extension (Dumbbell)|dumbbell|isolation|weight_reps|triceps||Dumbbell Overhead Extension;Triceps Extension (Dumbbell)
+Overhead Triceps Extension (Barbell)|ez_bar|isolation|weight_reps|triceps||
+Triceps Extension (Machine)|machine|isolation|weight_reps|triceps||Machine Triceps Extension
+Skullcrusher (Barbell)|ez_bar|isolation|weight_reps|triceps||Skull Crusher;Lying Triceps Extension
+Skullcrusher (Dumbbell)|dumbbell|isolation|weight_reps|triceps||
+Triceps Kickback (Dumbbell)|dumbbell|isolation|weight_reps|triceps||Kickback
+Triceps Kickback (Cable)|cable|isolation|weight_reps|triceps||
+Bench Dip|bodyweight|isolation|bodyweight_reps|triceps|front_delts,lower_chest|
+Triceps Dip|bodyweight|vertical_push|bodyweight_reps|triceps|lower_chest,front_delts|
+JM Press (Barbell)|barbell|horizontal_push|weight_reps|triceps|lower_chest|
+
+# ---- Forearms and grip
+Wrist Curl (Dumbbell)|dumbbell|isolation|weight_reps|forearm_flexors||Seated Palms Up Wrist Curl (Dumbbell);Palms Up Wrist Curl
+Wrist Curl (Barbell)|barbell|isolation|weight_reps|forearm_flexors||
+Reverse Wrist Curl (Dumbbell)|dumbbell|isolation|weight_reps|forearm_extensors||Palms Down Wrist Curl
+Reverse Wrist Curl (Barbell)|barbell|isolation|weight_reps|forearm_extensors||
+Reverse Curl (Barbell)|barbell|isolation|weight_reps|forearm_extensors,biceps||Reverse Grip Curl
+Reverse Curl (Dumbbell)|dumbbell|isolation|weight_reps|forearm_extensors,biceps||
+Wrist Roller|other|isolation|weight_reps|forearm_flexors,forearm_extensors|front_delts|
+Farmer's Walk (Dumbbell)|dumbbell|carry|weight_distance|forearm_flexors,traps|abs,obliques,glutes,quads|Farmers Carry;Farmer Walk
+Farmer's Walk (Trap Bar)|trap_bar|carry|weight_distance|forearm_flexors,traps|abs,glutes,quads|
+Suitcase Carry (Dumbbell)|dumbbell|carry|weight_distance|obliques,forearm_flexors|traps,abs|
+Dead Hang|bodyweight|isolation|duration|forearm_flexors|lats|Bar Hang
+Plate Pinch|plate|isolation|duration|forearm_flexors||
+
+# ---- Core
+Crunch|bodyweight|core|bodyweight_reps|abs||
+Crunch (Machine)|machine|core|weight_reps|abs|obliques|Ab Crunch Machine
+Cable Crunch|cable|core|weight_reps|abs|obliques|Kneeling Cable Crunch
+Decline Crunch|bodyweight|core|bodyweight_reps|abs|obliques|Decline Sit Up
+Sit Up|bodyweight|core|bodyweight_reps|abs|obliques|Situp
+Hanging Leg Raise|bodyweight|core|bodyweight_reps|abs|obliques,forearm_flexors|
+Hanging Knee Raise|bodyweight|core|bodyweight_reps|abs|obliques|
+Captain's Chair Leg Raise|bodyweight|core|bodyweight_reps|abs|obliques|Knee Raise (Captain's Chair)
+Lying Leg Raise|bodyweight|core|bodyweight_reps|abs||Leg Raise
+Ab Wheel|other|core|bodyweight_reps|abs|lats,obliques|Ab Wheel Rollout;Ab Roller
+Stability Ball Rollout|stability_ball|core|bodyweight_reps|abs|lats,obliques|Ball Rollout;Swiss Ball Rollout;Physioball Rollout
+Dead Bug|bodyweight|core|bodyweight_reps|abs|obliques|Swiss Ball Dead Bug;Stability Ball Dead Bug
+Plank|bodyweight|core|duration|abs|obliques,front_delts|Front Plank
+Side Plank|bodyweight|core|duration|obliques|abs,abductors|
+Russian Twist|bodyweight|core|bodyweight_reps|obliques|abs|Russian Twists;Weighted Russian Twist
+Cable Woodchop|cable|core|weight_reps|obliques|abs,front_delts|Woodchop;Wood Chop;Cable Twist;Cable Wood Chop
+Pallof Press (Cable)|cable|core|weight_reps|obliques|abs|Pallof Press
+Bicycle Crunch|bodyweight|core|bodyweight_reps|abs,obliques||
+Oblique Crunch|bodyweight|core|bodyweight_reps|obliques|abs|
+Hollow Body Hold|bodyweight|core|duration|abs||Hollow Hold
+Mountain Climber|bodyweight|core|bodyweight_reps|abs|front_delts,quads|
+Toes to Bar|bodyweight|core|bodyweight_reps|abs|lats,obliques,forearm_flexors|
+Landmine Rotation|landmine|core|weight_reps|obliques|abs,front_delts|Landmine 180
+
+# ---- Neck
+Neck Flexion (Plate)|plate|isolation|weight_reps|neck||Neck Curl
+Neck Extension (Plate)|plate|isolation|weight_reps|neck|traps|
+Neck Curl (Machine)|machine|isolation|weight_reps|neck||4-Way Neck
+
+# ---- Olympic and full body
+Power Clean (Barbell)|barbell|olympic|weight_reps|glutes,hamstrings,traps|quads,upper_back,lower_back,front_delts|Power Clean
+Hang Clean (Barbell)|barbell|olympic|weight_reps|glutes,hamstrings,traps|quads,upper_back,front_delts|
+Clean and Jerk (Barbell)|barbell|olympic|weight_reps|glutes,quads,front_delts|hamstrings,traps,triceps|
+Snatch (Barbell)|barbell|olympic|weight_reps|glutes,hamstrings,traps|quads,front_delts,upper_back|
+Thruster (Barbell)|barbell|olympic|weight_reps|quads,front_delts|glutes,triceps|
+Thruster (Dumbbell)|dumbbell|olympic|weight_reps|quads,front_delts|glutes,triceps|
+Burpee|bodyweight|cardio|bodyweight_reps|quads|lower_chest,front_delts,abs|
+Kettlebell Clean|kettlebell|olympic|weight_reps|glutes,hamstrings|traps,front_delts|
+Turkish Get Up (Kettlebell)|kettlebell|core|weight_reps|front_delts,abs|obliques,glutes,quads|Turkish Get Up
+Sled Push|other|carry|weight_distance|quads,glutes|calves|
+Medicine Ball Slam|medicine_ball|core|weight_reps|abs|lats,front_delts|Ball Slam
+
+# ---- Cardio
+Running|cardio|cardio|distance_duration|||Run;Outdoor Run
+Running (Treadmill)|cardio|cardio|distance_duration|||Treadmill
+Walking|cardio|cardio|distance_duration|||Walk
+Incline Walk (Treadmill)|cardio|cardio|distance_duration|||Incline Treadmill Walk
+Cycling|cardio|cardio|distance_duration|||Bike;Outdoor Cycling
+Cycling (Indoor)|cardio|cardio|distance_duration|||Stationary Bike;Spin Bike
+Rowing (Machine)|cardio|cardio|distance_duration|||Rower;Erg;Rowing
+Elliptical|cardio|cardio|distance_duration|||Elliptical Trainer
+Stair Climber|cardio|cardio|distance_duration|||StairMaster;Stair Machine
+Assault Bike|cardio|cardio|distance_duration|||Air Bike
+Ski Erg|cardio|cardio|distance_duration|||SkiErg
+Swimming|cardio|cardio|distance_duration|||Swim
+Jump Rope|cardio|cardio|duration|||Skipping
+Hiking|cardio|cardio|distance_duration|||Hike

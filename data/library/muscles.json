@@ -1,0 +1,35 @@
+{
+  "groups": [
+    { "id": "chest", "name": "Chest" },
+    { "id": "shoulders", "name": "Shoulders" },
+    { "id": "back", "name": "Back" },
+    { "id": "arms", "name": "Arms" },
+    { "id": "core", "name": "Core" },
+    { "id": "legs", "name": "Legs" },
+    { "id": "neck", "name": "Neck" }
+  ],
+  "muscles": [
+    { "id": "upper_chest", "name": "Upper chest", "group": "chest" },
+    { "id": "lower_chest", "name": "Mid/lower chest", "group": "chest" },
+    { "id": "front_delts", "name": "Front delts", "group": "shoulders" },
+    { "id": "side_delts", "name": "Side delts", "group": "shoulders" },
+    { "id": "rear_delts", "name": "Rear delts", "group": "shoulders" },
+    { "id": "lats", "name": "Lats", "group": "back" },
+    { "id": "upper_back", "name": "Upper back / rhomboids", "group": "back" },
+    { "id": "traps", "name": "Traps", "group": "back" },
+    { "id": "lower_back", "name": "Lower back / erectors", "group": "back" },
+    { "id": "biceps", "name": "Biceps", "group": "arms" },
+    { "id": "triceps", "name": "Triceps", "group": "arms" },
+    { "id": "forearm_flexors", "name": "Forearm flexors", "group": "arms" },
+    { "id": "forearm_extensors", "name": "Forearm extensors", "group": "arms" },
+    { "id": "abs", "name": "Abs", "group": "core" },
+    { "id": "obliques", "name": "Obliques", "group": "core" },
+    { "id": "glutes", "name": "Glutes", "group": "legs" },
+    { "id": "quads", "name": "Quads", "group": "legs" },
+    { "id": "hamstrings", "name": "Hamstrings", "group": "legs" },
+    { "id": "adductors", "name": "Adductors", "group": "legs" },
+    { "id": "abductors", "name": "Abductors", "group": "legs" },
+    { "id": "calves", "name": "Calves", "group": "legs" },
+    { "id": "neck", "name": "Neck", "group": "neck" }
+  ]
+}

@@ -1,0 +1,15 @@
+[package]
+name = "liftbook-core"
+version = "0.1.0"
+edition = "2024"
+description = "Liftbook domain logic: importers, stats, schedule, storage"
+license = "MIT"
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
+csv = "1"
+regex = "1"
+rusqlite = { version = "0.41", features = ["bundled", "backup"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
