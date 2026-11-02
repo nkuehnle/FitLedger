@@ -112,6 +112,91 @@
           ["leg-extension-machine", 3, 12, 15, "s1"], ["lying-leg-curl-machine", 3, 12, 15, "s1"], ["standing-calf-raise-machine", 4, 10, 15]
         ]
       }
+    },
+    {
+      "id": "stronglifts-5x5",
+      "name": "StrongLifts 5×5 (3 days)",
+      "description": "Beginner barbell program: two alternating workouts, Mon/Wed/Fri, 5 sets of 5. Add weight every session you complete all reps.",
+      "days": ["SL A", null, "SL B", null, "SL A", null, null, "SL B", null, "SL A", null, "SL B", null, null],
+      "templates": {
+        "SL A": [
+          ["squat-barbell", 5, 5, 5], ["bench-press-barbell", 5, 5, 5], ["bent-over-row-barbell", 5, 5, 5]
+        ],
+        "SL B": [
+          ["squat-barbell", 5, 5, 5], ["overhead-press-barbell", 5, 5, 5], ["deadlift-barbell", 1, 5, 5]
+        ]
+      }
+    },
+    {
+      "id": "starting-strength",
+      "name": "Starting Strength (3 days)",
+      "description": "Novice linear progression: alternating A/B workouts Mon/Wed/Fri, 3 sets of 5 (deadlift 1×5, power clean 5×3).",
+      "days": ["SS A", null, "SS B", null, "SS A", null, null, "SS B", null, "SS A", null, "SS B", null, null],
+      "templates": {
+        "SS A": [
+          ["squat-barbell", 3, 5, 5], ["bench-press-barbell", 3, 5, 5], ["deadlift-barbell", 1, 5, 5]
+        ],
+        "SS B": [
+          ["squat-barbell", 3, 5, 5], ["overhead-press-barbell", 3, 5, 5], ["power-clean-barbell", 5, 3, 3]
+        ]
+      }
+    },
+    {
+      "id": "texas-method",
+      "name": "Texas Method (3 days)",
+      "description": "Intermediate weekly cycle: a volume day, a light day and an intensity day where you set a new 5-rep record.",
+      "days": ["TM Volume", null, "TM Light", null, "TM Intensity", null, null],
+      "templates": {
+        "TM Volume": [
+          ["squat-barbell", 5, 5, 5], ["bench-press-barbell", 5, 5, 5], ["deadlift-barbell", 1, 5, 5]
+        ],
+        "TM Light": [
+          ["squat-barbell", 2, 5, 5], ["overhead-press-barbell", 3, 5, 5], ["chin-up", 3, 5, 10], ["back-extension", 3, 10, 15]
+        ],
+        "TM Intensity": [
+          ["squat-barbell", 1, 5, 5], ["bench-press-barbell", 1, 5, 5], ["power-clean-barbell", 5, 3, 3]
+        ]
+      }
+    },
+    {
+      "id": "gzclp-4",
+      "name": "GZCLP (4 days)",
+      "description": "Tiered linear progression: a heavy main lift (5×3), a volume lift (3×10) and light accessory work (3×15+) each day.",
+      "days": ["GZCLP 1", "GZCLP 2", null, "GZCLP 3", "GZCLP 4", null, null],
+      "templates": {
+        "GZCLP 1": [
+          ["squat-barbell", 5, 3, 3], ["bench-press-barbell", 3, 10, 10], ["lat-pulldown-cable", 3, 15, 25]
+        ],
+        "GZCLP 2": [
+          ["overhead-press-barbell", 5, 3, 3], ["deadlift-barbell", 3, 10, 10], ["bent-over-row-dumbbell", 3, 15, 25]
+        ],
+        "GZCLP 3": [
+          ["bench-press-barbell", 5, 3, 3], ["squat-barbell", 3, 10, 10], ["lat-pulldown-cable", 3, 15, 25]
+        ],
+        "GZCLP 4": [
+          ["deadlift-barbell", 5, 3, 3], ["overhead-press-barbell", 3, 10, 10], ["bent-over-row-dumbbell", 3, 15, 25]
+        ]
+      }
+    },
+    {
+      "id": "531-bbb",
+      "name": "5/3/1 Boring But Big (4 days)",
+      "description": "Monthly wave on one main lift a day (3 working sets of 5/3/1), then 5×10 of the same lift and one assistance exercise.",
+      "days": ["531 Press", "531 Deadlift", null, "531 Bench", "531 Squat", null, null],
+      "templates": {
+        "531 Press": [
+          ["overhead-press-barbell", 3, 1, 5], ["overhead-press-barbell", 5, 10, 10], ["chin-up", 5, 5, 10]
+        ],
+        "531 Deadlift": [
+          ["deadlift-barbell", 3, 1, 5], ["deadlift-barbell", 5, 10, 10], ["hanging-leg-raise", 5, 10, 15]
+        ],
+        "531 Bench": [
+          ["bench-press-barbell", 3, 1, 5], ["bench-press-barbell", 5, 10, 10], ["bent-over-row-dumbbell", 5, 10, 10]
+        ],
+        "531 Squat": [
+          ["squat-barbell", 3, 1, 5], ["squat-barbell", 5, 10, 10], ["lying-leg-curl-machine", 5, 10, 12]
+        ]
+      }
     }
   ]
 }

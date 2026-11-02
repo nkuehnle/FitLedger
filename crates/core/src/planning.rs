@@ -788,7 +788,8 @@ pub struct Program {
     pub id: String,
     pub name: String,
     pub description: String,
-    /// Template name per weekday, Monday first; null = rest.
+    /// Template name per day, Monday first; null = rest. 7 days repeat weekly; 14 days alternate
+    /// two weeks (e.g. A/B/A then B/A/B).
     pub days: Vec<Option<String>>,
     /// Template name -> [slug, sets, rep min, rep max, optional superset tag].
     pub templates: BTreeMap<String, Vec<serde_json::Value>>,
@@ -837,7 +838,14 @@ impl Db {
             ids.insert(name.clone(), id);
         }
         let days = p.days.iter().map(|d| d.as_ref().and_then(|n| ids.get(n).copied())).collect();
-        self.save_schedule(&Schedule { id: None, name: p.name.clone(), kind: "weekly".into(), start_date: start.to_string(), cycle_length: 7, days })?;
+        let schedule = if p.days.len() == 7 {
+            Schedule { id: None, name: p.name.clone(), kind: "weekly".into(), start_date: start.to_string(), cycle_length: 7, days }
+        } else {
+            // A multi-week cycle counts from a Monday so its days still land on the right weekdays.
+            let monday = crate::stats::week_start(start);
+            Schedule { id: None, name: p.name.clone(), kind: "cycle".into(), start_date: monday.to_string(), cycle_length: p.days.len() as i64, days }
+        };
+        self.save_schedule(&schedule)?;
         Ok(ids.into_values().collect())
     }
 }

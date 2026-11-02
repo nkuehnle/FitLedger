@@ -102,6 +102,25 @@ fn every_builtin_program_installs() {
 }
 
 #[test]
+fn two_week_programs_alternate_on_the_same_weekdays() {
+    // Installed on a Wednesday: the cycle counts from that Monday, A/B/A then B/A/B.
+    let d = |day| chrono::NaiveDate::from_ymd_opt(2026, 11, day).unwrap();
+    let mut db = Db::open_in_memory().unwrap();
+    db.install_program("stronglifts-5x5", d(4)).unwrap();
+    let s = db.active_schedule().unwrap().unwrap();
+    assert_eq!((s.kind.as_str(), s.cycle_length, s.start_date.as_str()), ("cycle", 14, "2026-11-02"));
+    let name = |day| {
+        let id = s.planned(d(day))?;
+        db.list_templates().unwrap().into_iter().find(|t| t.id == Some(id)).map(|t| t.name)
+    };
+    let week1: Vec<_> = [2, 3, 4, 6].map(name).into();
+    let week2: Vec<_> = [9, 11, 13].map(name).into();
+    assert_eq!(week1, [Some("SL A".into()), None, Some("SL B".into()), Some("SL A".into())]);
+    assert_eq!(week2, [Some("SL B".into()), Some("SL A".into()), Some("SL B".into())]);
+    assert_eq!(name(16), Some("SL A".into()), "the third week starts over");
+}
+
+#[test]
 fn inbody_csv_mapping_is_guessed_then_remembered() {
     let text = fixture("inbody_sample.csv");
     let mut db = Db::open_in_memory().unwrap();

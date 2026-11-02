@@ -1,6 +1,6 @@
 [package]
 name = "liftbook"
-version = "0.1.5"
+version = "0.1.6"
 description = "Personal lift tracker"
 authors = ["njk639"]
 edition = "2024"
