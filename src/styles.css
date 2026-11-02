@@ -2227,3 +2227,10 @@ input.num {
   display: flex;
   gap: 8px;
 }
+label.flagged input {
+  border-color: var(--warn);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--warn) 30%, transparent);
+}
+label.flagged {
+  color: var(--warn);
+}

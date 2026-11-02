@@ -638,6 +638,12 @@ export const api = {
   updateMeasurement: (id: number, at: string, value: number) => invoke<void>("update_measurement", { id, at, value }),
   inbodyFields: () => invoke<InBodyField[]>("inbody_fields"),
   inbodyScans: () => invoke<InBodyScan[]>("inbody_scans"),
+  /** On-device OCR of an InBody 580 result sheet image (base64); values in storage units. */
+  readInbodyImage: (data: string, massUnit: "kg" | "lb") =>
+    invoke<{ measured_at: string | null; values: Record<string, number>; doubtful: string[]; mass_unit: "kg" | "lb" | null }>(
+      "read_inbody_image",
+      { data, massUnit },
+    ),
   saveInbodyScan: (scan: InBodyScan) => invoke<number>("save_inbody_scan", { scan }),
   deleteInbodyScan: (id: number) => invoke<void>("delete_inbody_scan", { id }),
   previewInbodyCsv: (text: string, mapping?: CsvMapping) => invoke<InBodyCsvPreview>("preview_inbody_csv", { text, mapping }),

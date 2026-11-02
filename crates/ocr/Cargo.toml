@@ -1,0 +1,14 @@
+[package]
+name = "liftbook-ocr"
+version = "0.1.2"
+edition = "2021"
+description = "Offline OCR of InBody result sheets (ocrs)"
+license = "MIT"
+
+[dependencies]
+ocrs = { version = "0.13.1", features = ["rten"] }
+rten = { version = "0.26.0", default-features = false }
+rten-tensor = "0.26.0"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
+serde = { version = "1", features = ["derive"] }
+rten-imageproc = "0.26.0"

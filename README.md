@@ -61,10 +61,20 @@ cargo run -p liftbook-core --example import_strong -- <path/to/liftbook.db> stro
 The app's database is `liftbook.db` in the platform app-data folder (Linux:
 `~/.local/share/io.github.njk639.liftbook/`).
 
+### InBody result sheets
+
+Measure → Body comp → **Read sheet images** reads InBody 580 result sheets saved as PNG/JPEG,
+entirely on the device (`crates/ocr`, using the [Ocrs](https://github.com/robertknight/ocrs)
+engine with its models embedded). Each value is read from its known place on the sheet and the
+totals are cross-checked; anything doubtful opens in the scan form for a quick check. Ocrs models
+are trained on Google Research's HierText dataset and licensed CC BY-SA 4.0 (see
+`crates/ocr/models/README.md`).
+
 ## Development
 
 ```sh
 cargo test -p liftbook-core        # core tests (some use your real Strong export, see below)
+cargo test --release -p liftbook-ocr   # OCR tests (real sheets in ~/my_data/inbody, if present)
 pnpm test                          # frontend unit tests (LOESS)
 pnpm build                         # type-check and build the UI
 pnpm format                        # format the frontend

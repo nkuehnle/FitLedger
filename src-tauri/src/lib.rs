@@ -742,6 +742,41 @@ fn share_png(app: tauri::AppHandle, name: String, data: String) -> CmdResult<()>
     share_file(&app, &path, "image/png", "Share image")
 }
 
+#[derive(Serialize)]
+struct InBodyImageRead {
+    measured_at: Option<String>,
+    /// Field column → value in storage units (kg, L, %, …).
+    values: std::collections::BTreeMap<String, f64>,
+    doubtful: Vec<String>,
+    mass_unit: Option<&'static str>,
+}
+
+/// Reads an InBody 580 result sheet image (base64) with on-device OCR. Takes a few seconds, so
+/// it runs off the main thread. Masses (and water, printed in the same unit) are converted to kg / L.
+#[tauri::command]
+async fn read_inbody_image(data: String, mass_unit: Option<String>) -> CmdResult<InBodyImageRead> {
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data).map_err(|e| e.to_string())?;
+    let r = tauri::async_runtime::spawn_blocking(move || liftbook_ocr::read_inbody580(&bytes))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
+    let unit = r.mass_unit.or(match mass_unit.as_deref() {
+        Some("kg") => Some("kg"),
+        _ => Some("lb"),
+    });
+    let factor = if unit == Some("lb") { 0.45359237 } else { 1.0 };
+    let values = r
+        .values
+        .into_iter()
+        .map(|(k, v)| {
+            let kind = liftbook_core::body::INBODY_FIELDS.iter().find(|f| f.0 == k).map(|f| f.2).unwrap_or("");
+            let v = if kind == "kg" || kind == "l" { v * factor } else { v };
+            (k, v)
+        })
+        .collect();
+    Ok(InBodyImageRead { measured_at: r.measured_at, values, doubtful: r.doubtful, mass_unit: r.mass_unit })
+}
+
 /// Android: saves a PNG (sent as base64) to the gallery, Pictures/Liftbook.
 #[tauri::command]
 fn save_png_to_photos(app: tauri::AppHandle, name: String, data: String) -> CmdResult<()> {
@@ -1025,7 +1060,7 @@ pub fn run() {
             body_parts, measurements, add_measurement, delete_measurement,
             export_file, backup_to, inspect_backup, restore_from, db_info, save_base64, copy_png,
             rest_android_status, rest_android_rest, rest_android_clear, weigh_in_reminder, set_orientation,
-            share_export, share_backup, share_png, save_png_to_photos, stage_backup,
+            share_export, share_backup, share_png, save_png_to_photos, read_inbody_image, stage_backup,
             counts, get_setting, set_setting,
         ])
         .run(tauri::generate_context!())

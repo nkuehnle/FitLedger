@@ -22,6 +22,7 @@ import { Modal } from "../components/Modal";
 import { ShareButton } from "../share/ShareDialog";
 import { formatDate, formatTime, nowLocal, parseLocal, toUnit } from "../format";
 import { GOAL_TEXT, goalStatus, type GoalInfo } from "../goal";
+import { fileToBase64 } from "../platform";
 
 const KG_PER_LB = 0.45359237;
 type Tab = "weight" | "inbody" | "diet" | "parts";
@@ -536,6 +537,9 @@ function InBodyTab() {
   const [scans, setScans] = useState<InBodyScan[]>([]);
   const [phases, setPhases] = useState<Phase[]>([]);
   const [editing, setEditing] = useState<InBodyScan | null>(null);
+  const [flagged, setFlagged] = useState<string[]>([]);
+  const [review, setReview] = useState<{ scan: InBodyScan; doubtful: string[] }[]>([]);
+  const [reading, setReading] = useState<string | null>(null);
   const [csv, setCsv] = useState<{ text: string; preview: InBodyCsvPreview } | null>(null);
   const [metric, setMetric] = useState("smm_kg");
   const [msg, setMsg] = useState<string | null>(null);
@@ -563,21 +567,90 @@ function InBodyTab() {
     setCsv({ text, preview: await api.previewInbodyCsv(text) });
   }
 
+  /** Result-sheet images: clean reads are saved, anything doubtful opens for a check. */
+  async function onImages(files: FileList | null) {
+    if (!files?.length) return;
+    setMsg(null);
+    const existing = new Set(scans.map((s) => s.measured_at_local.slice(0, 16)));
+    let saved = 0;
+    let skipped = 0;
+    const toCheck: { scan: InBodyScan; doubtful: string[] }[] = [];
+    const failed: string[] = [];
+    for (const [i, file] of [...files].entries()) {
+      setReading(`Reading sheet ${i + 1} of ${files.length}…`);
+      try {
+        const r = await api.readInbodyImage(await fileToBase64(file), unit);
+        if (r.measured_at && existing.has(r.measured_at.slice(0, 16))) {
+          skipped++;
+          continue;
+        }
+        const scan: InBodyScan = {
+          id: null,
+          measured_at_local: r.measured_at ?? nowLocal(),
+          values: r.values,
+          device: "InBody 580",
+          notes: null,
+        };
+        if (r.doubtful.length === 0 && r.measured_at) {
+          await api.saveInbodyScan(scan);
+          existing.add(r.measured_at.slice(0, 16));
+          saved++;
+        } else {
+          toCheck.push({ scan, doubtful: r.measured_at ? r.doubtful : [...r.doubtful, "date"] });
+        }
+      } catch (e) {
+        failed.push(`${file.name}: ${e}`);
+      }
+    }
+    setReading(null);
+    load();
+    setMsg(
+      [
+        saved && `Saved ${saved} scan${saved > 1 ? "s" : ""}.`,
+        skipped && `${skipped} already in your scans.`,
+        toCheck.length && `${toCheck.length} need${toCheck.length > 1 ? "" : "s"} a quick check.`,
+        failed.length && `Couldn't read: ${failed.join("; ")}`,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    );
+    if (toCheck.length) {
+      setEditing(toCheck[0].scan);
+      setFlagged(toCheck[0].doubtful);
+      setReview(toCheck.slice(1));
+    }
+  }
+  const nextReview = () => {
+    const [next, ...rest] = review;
+    setEditing(next?.scan ?? null);
+    setFlagged(next?.doubtful ?? []);
+    setReview(rest);
+  };
+
   return (
     <>
       <section className="card">
         <div className="row" style={{ marginTop: 0 }}>
           <button
             className="button primary"
-            onClick={() => setEditing({ id: null, measured_at_local: nowLocal(), values: {}, device: null, notes: null })}
+            onClick={() => {
+              setFlagged([]);
+              setEditing({ id: null, measured_at_local: nowLocal(), values: {}, device: null, notes: null });
+            }}
           >
             + Add scan
           </button>
+          <label className="button">
+            Read sheet images
+            <input type="file" accept="image/*" multiple hidden disabled={!!reading} onChange={(e) => onImages(e.target.files)} />
+          </label>
           <label className="button">
             Import CSV
             <input type="file" accept=".csv,text/csv" hidden onChange={(e) => onFile(e.target.files?.[0])} />
           </label>
         </div>
+        <p className="muted small">Sheet images: InBody 580 result sheets saved as PNG or JPEG, read on this device.</p>
+        {reading && <p className="small">{reading}</p>}
         {msg && <p className="success small">{msg}</p>}
       </section>
       {scans.length === 0 ? (
@@ -619,7 +692,14 @@ function InBodyTab() {
           <section className="card">
             <div className="section-label">Scans</div>
             {[...scans].reverse().map((s) => (
-              <div key={s.id} className="start-row" onClick={() => setEditing(s)}>
+              <div
+                key={s.id}
+                className="start-row"
+                onClick={() => {
+                  setFlagged([]);
+                  setEditing(s);
+                }}
+              >
                 <span>
                   {formatDate(s.measured_at_local)}
                   <span className="muted small">
@@ -637,13 +717,15 @@ function InBodyTab() {
       )}
       {editing && (
         <ScanForm
+          key={editing.measured_at_local}
           scan={editing}
           fields={fields}
           unit={unit}
-          onClose={() => setEditing(null)}
+          flagged={flagged}
+          onClose={nextReview}
           onSaved={() => {
-            setEditing(null);
             load();
+            nextReview();
           }}
         />
       )}
@@ -767,12 +849,15 @@ function ScanForm({
   scan,
   fields,
   unit,
+  flagged = [],
   onClose,
   onSaved,
 }: {
   scan: InBodyScan;
   fields: InBodyField[];
   unit: "kg" | "lb";
+  /** Fields read from an image that need checking (highlighted). */
+  flagged?: string[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -838,13 +923,20 @@ function ScanForm({
             <input value={device} placeholder="InBody 570" onChange={(e) => setDevice(e.target.value)} />
           </label>
         </div>
-        <p className="muted small">Every field is optional; fill in what's on your result sheet.</p>
+        {flagged.length > 0 ? (
+          <p className="warn small">
+            Read from the sheet image. Check the highlighted {flagged.includes("date") ? "date and " : ""}fields against the sheet before
+            saving.
+          </p>
+        ) : (
+          <p className="muted small">Every field is optional; fill in what's on your result sheet.</p>
+        )}
         {groups.map(([title, pred]) => (
-          <details key={title} open={title === "Body composition"}>
+          <details key={title} open={title === "Body composition" || fields.some((f) => pred(f) && flagged.includes(f.column))}>
             <summary className="section-label">{title}</summary>
             <div className="field-grid">
               {fields.filter(pred).map((f) => (
-                <label key={f.column}>
+                <label key={f.column} className={flagged.includes(f.column) ? "flagged" : undefined}>
                   {label(f)}
                   <input
                     inputMode="decimal"
