@@ -46,6 +46,9 @@ pub struct SetView {
     pub duration_s: Option<f64>,
     pub rest_s: Option<i64>,
     pub completed: bool,
+    /// Cardio: average heart rate and calories for the segment, if logged.
+    pub avg_hr: Option<i64>,
+    pub kcal: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -102,7 +105,7 @@ const EXERCISES_SQL: &str = "
     WHERE we.workout_id = ?1 ORDER BY we.position";
 
 const SETS_SQL: &str = "
-    SELECT id, set_type, weight_kg, reps, rpe, distance_m, duration_s, rest_s, completed
+    SELECT id, set_type, weight_kg, reps, rpe, distance_m, duration_s, rest_s, completed, avg_hr, kcal
     FROM workout_set WHERE workout_exercise_id = ?1 ORDER BY position";
 
 fn load_factor(load_mode: &str) -> f64 {
@@ -117,23 +120,17 @@ fn volume(sets: &[SetView], load_mode: &str) -> f64 {
         * load_factor(load_mode)
 }
 
-/// Heaviest working set (ties: more reps); for cardio/timed work, the longest distance or duration.
+/// Heaviest working set (ties: more reps); for cardio/timed work, the session's total distance and time.
 fn best_set(sets: &[SetView]) -> Option<BestSet> {
     let working = sets.iter().filter(|s| s.set_type != "warmup");
-    let best = working
-        .clone()
-        .filter(|s| s.reps.is_some())
-        .max_by(|a, b| {
-            a.weight_kg.unwrap_or(0.0).total_cmp(&b.weight_kg.unwrap_or(0.0)).then(a.reps.cmp(&b.reps))
-        })
-        .or_else(|| {
-            working.max_by(|a, b| {
-                (a.distance_m.unwrap_or(0.0), a.duration_s.unwrap_or(0.0))
-                    .partial_cmp(&(b.distance_m.unwrap_or(0.0), b.duration_s.unwrap_or(0.0)))
-                    .unwrap()
-            })
-        })?;
-    Some(BestSet { weight_kg: best.weight_kg, reps: best.reps, distance_m: best.distance_m, duration_s: best.duration_s })
+    if let Some(best) = working.clone().filter(|s| s.reps.is_some()).max_by(|a, b| {
+        a.weight_kg.unwrap_or(0.0).total_cmp(&b.weight_kg.unwrap_or(0.0)).then(a.reps.cmp(&b.reps))
+    }) {
+        return Some(BestSet { weight_kg: best.weight_kg, reps: best.reps, distance_m: best.distance_m, duration_s: best.duration_s });
+    }
+    let sum = |f: fn(&SetView) -> Option<f64>| working.clone().filter_map(f).reduce(|a, b| a + b);
+    let (distance_m, duration_s) = (sum(|s| s.distance_m), sum(|s| s.duration_s));
+    (distance_m.is_some() || duration_s.is_some()).then_some(BestSet { weight_kg: None, reps: None, distance_m, duration_s })
 }
 
 impl Db {
@@ -180,6 +177,8 @@ impl Db {
                         duration_s: r.get(6)?,
                         rest_s: r.get(7)?,
                         completed: r.get(8)?,
+                        avg_hr: r.get(9)?,
+                        kcal: r.get(10)?,
                     })
                 })?
                 .collect::<rusqlite::Result<_>>()?;

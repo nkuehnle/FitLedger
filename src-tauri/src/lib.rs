@@ -813,6 +813,18 @@ fn stage_backup(app: tauri::AppHandle, data: String) -> CmdResult<StagedBackup> 
     Ok(StagedBackup { path: path.to_string_lossy().into_owned(), info })
 }
 
+// ---- Cardio ---------------------------------------------------------------------------------------
+
+#[tauri::command]
+fn cardio_sessions(state: State<AppState>) -> CmdResult<Vec<liftbook_core::cardio::CardioSession>> {
+    with(&state, |db| db.cardio_sessions())
+}
+
+#[tauri::command]
+fn log_cardio(state: State<AppState>, entry: liftbook_core::cardio::CardioEntry) -> CmdResult<i64> {
+    with(&state, |db| db.log_cardio(&entry))
+}
+
 // ---- Automatic backups ------------------------------------------------------------------------------
 //
 // Once a week (checked when the app starts) a full backup goes to Download/Liftbook on Android, or
@@ -829,7 +841,11 @@ fn auto_backup(app: tauri::AppHandle, state: State<AppState>, force: bool) -> Cm
     })?;
     let due = last
         .and_then(|l| chrono::NaiveDateTime::parse_from_str(&l, "%Y-%m-%d %H:%M:%S").ok())
-        .is_none_or(|l| (Local::now().naive_local() - l).num_days() >= AUTO_EVERY_DAYS);
+        // A date in the future (clock changed, restored from elsewhere) counts as due too.
+        .is_none_or(|l| {
+            let now = Local::now().naive_local();
+            l > now || (now - l).num_days() >= AUTO_EVERY_DAYS
+        });
     if !force && (!enabled || !due || workouts == 0) {
         return Ok(None);
     }
@@ -1113,7 +1129,7 @@ pub fn run() {
             preview_inbody_csv, import_inbody_csv, diet_days, save_diet_day, energy_balance,
             body_parts, measurements, add_measurement, delete_measurement,
             export_file, backup_to, inspect_backup, restore_from, db_info, save_base64, copy_png,
-            rest_android_status, rest_android_rest, rest_android_clear, weigh_in_reminder, auto_backup,
+            rest_android_status, rest_android_rest, rest_android_clear, weigh_in_reminder, auto_backup, cardio_sessions, log_cardio,
             share_export, share_backup, share_png, save_png_to_photos, read_inbody_image, stage_backup,
             counts, get_setting, set_setting,
         ])

@@ -76,6 +76,15 @@ totals are cross-checked; anything doubtful opens in the scan form for a quick c
 are trained on Google Research's HierText dataset and licensed CC BY-SA 4.0 (see
 `crates/ocr/models/README.md`).
 
+### Cardio
+
+Runs, rides and rows are distance + time exercises (`crates/core/src/cardio.rs`, `src/cardio.ts`).
+In a workout each segment shows its pace (or speed for cycling, /500 m for rowing) as you type,
+with optional average heart rate and calories, and a stopwatch fills in the time. Progress →
+Cardio shows weekly minutes against a goal (default 150), each activity's pace trend against your
+usual, and logs sessions done outside a workout. Cardio PRs: longest distance, longest time and
+fastest pace (sessions of at least 400 m).
+
 ### Body fat estimates
 
 Measure → Body comp plots body fat from InBody scans, body fat logged in Strong, and two tape

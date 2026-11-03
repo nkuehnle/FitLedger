@@ -294,6 +294,10 @@ CREATE INDEX body_measurement_part ON body_measurement (part, measured_at_local)
 "#, r#"
 -- Migration 5: optional weekly bodyweight-change target on a goal (nutrition phase), kg/week.
 ALTER TABLE phase ADD COLUMN weekly_rate_kg REAL;
+"#, r#"
+-- Migration 6: cardio details per set (a segment of a run, ride or row).
+ALTER TABLE workout_set ADD COLUMN avg_hr INTEGER;
+ALTER TABLE workout_set ADD COLUMN kcal REAL;
 "#];
 
 pub(crate) const MIGRATION_COUNT: usize = MIGRATIONS.len();

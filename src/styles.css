@@ -2285,3 +2285,70 @@ label.flagged {
   color: var(--text);
   white-space: nowrap;
 }
+
+/* Cardio: pace, heart rate and calories under each segment; stopwatch above the table. */
+.cardio-extra td {
+  padding-top: 0;
+  border-top: none;
+}
+.cardio-extra-row {
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: center;
+}
+.cardio-extra-row .mini-input {
+  width: 5.2em;
+  padding: 3px 6px;
+  margin-left: 4px;
+}
+.cardio-pace {
+  font-variant-numeric: tabular-nums;
+  min-width: 6.5em;
+  color: var(--text);
+}
+.cardio-stopwatch {
+  margin: 4px 0 8px;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Cardio page */
+.goal-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+  margin: 8px 0;
+}
+.goal-bar > div {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+}
+.cardio-log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px 12px;
+}
+.form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.form-grid label > * {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+a.start-row {
+  color: inherit;
+  text-decoration: none;
+}

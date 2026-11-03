@@ -17,6 +17,7 @@ import { isoDate } from "../charts/RangePicker";
 import { templateColor, useChartTheme, type ChartTheme } from "../charts/theme";
 import { ShareButton } from "../share/ShareDialog";
 import { StartPanel } from "../components/StartPanel";
+import { distText, paceMode, paceText } from "../cardio";
 import { TodayCard } from "../components/TodayCard";
 import {
   EQUIPMENT_LABELS,
@@ -152,9 +153,11 @@ function Feed({ selectedId }: { selectedId: number | null }) {
             {c.exercises.map((e, i) => (
               <li key={i} className="superset-row" data-group={e.superset ?? undefined}>
                 <span className="ex-name">
-                  {e.sets} × {e.name}
+                  {/* Cardio reads "Running" (one segment) rather than "1 × Running". */}
+                  {e.best?.reps == null && e.best?.distance_m != null && e.sets === 1 ? "" : `${e.sets} × `}
+                  {e.name}
                 </span>
-                <span className="muted">{e.best && bestText(e.best, unit)}</span>
+                <span className="muted">{e.best && bestText(e.best, unit, e.name)}</span>
               </li>
             ))}
           </ul>
@@ -167,9 +170,12 @@ function Feed({ selectedId }: { selectedId: number | null }) {
   );
 }
 
-export function bestText(b: BestSet, unit: WeightUnit): string {
+/** Heaviest set, or for cardio the session's distance · time · pace. */
+export function bestText(b: BestSet, unit: WeightUnit, name = ""): string {
   if (b.reps != null) return b.weight_kg ? `${formatWeight(b.weight_kg, unit)} ${unit} × ${b.reps}` : `${b.reps} reps`;
-  return [formatDistance(b.distance_m, unit), formatClock(b.duration_s)].filter(Boolean).join(" · ");
+  return [formatDistance(b.distance_m, unit), formatClock(b.duration_s), paceText(b.distance_m, b.duration_s, paceMode(name), unit)]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 // ---- Calendar ---------------------------------------------------------------------------------------
@@ -303,7 +309,16 @@ export function groupPrs(prs: PrView[]): [string, PrView[]][] {
 }
 
 /** Short PR labels, in display order (like Strong's trophy tags). */
-export const PR_TAG: Record<PrView["kind"], string> = { e1rm: "1RM", weight: "Weight", rep_max: "Reps", reps: "Reps", volume: "Vol" };
+export const PR_TAG: Record<PrView["kind"], string> = {
+  e1rm: "1RM",
+  weight: "Weight",
+  rep_max: "Reps",
+  reps: "Reps",
+  volume: "Vol",
+  pace: "Pace",
+  distance: "Distance",
+  duration: "Time",
+};
 
 /** The distinct short tags for an exercise's PRs, in display order. */
 export function prTags(ps: PrView[]): string[] {
@@ -324,6 +339,13 @@ export function prText(p: PrView, unit: WeightUnit): string {
       return p.reps === 12 ? `12+ rep max ${w(p.value)}` : `${p.reps}-rep max ${w(p.value)}`;
     case "reps":
       return `${p.value} reps`;
+    case "distance":
+      return `Longest ${distText(p.value, unit)}`;
+    case "duration":
+      return `Longest ${formatClock(p.value)}`;
+    case "pace":
+      // Stored as speed (m/s); shown as pace, speed or /500 m for the activity.
+      return `Fastest ${paceText(p.value * 1000, 1000, paceMode(p.exercise_name), unit)}`;
   }
 }
 

@@ -36,6 +36,10 @@ pub struct SetUpdate {
     pub duration_s: Option<Option<f64>>,
     #[serde(default, with = "double_option")]
     pub rpe: Option<Option<f64>>,
+    #[serde(default, with = "double_option")]
+    pub avg_hr: Option<Option<i64>>,
+    #[serde(default, with = "double_option")]
+    pub kcal: Option<Option<f64>>,
     pub completed: Option<bool>,
 }
 
@@ -464,6 +468,12 @@ impl Db {
         }
         if let Some(v) = u.rpe {
             c.execute("UPDATE workout_set SET rpe = ?2 WHERE id = ?1", params![set_id, v])?;
+        }
+        if let Some(v) = u.avg_hr {
+            c.execute("UPDATE workout_set SET avg_hr = ?2 WHERE id = ?1", params![set_id, v])?;
+        }
+        if let Some(v) = u.kcal {
+            c.execute("UPDATE workout_set SET kcal = ?2 WHERE id = ?1", params![set_id, v])?;
         }
         if let Some(v) = u.completed {
             c.execute("UPDATE workout_set SET completed = ?2 WHERE id = ?1", params![set_id, v])?;

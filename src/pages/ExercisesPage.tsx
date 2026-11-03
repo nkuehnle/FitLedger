@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type ExerciseInfo, type ExerciseStats, type Muscle, type Phase, type WeighInRow } from "../api";
+import { api, type CardioSession, type ExerciseInfo, type ExerciseStats, type Muscle, type Phase, type WeighInRow } from "../api";
 import { navigate, usePrefs } from "../App";
 import { RangePicker, inRange, useSavedRange } from "../charts/RangePicker";
+import { CardioActivity } from "./CardioPage";
 import { TimeSeriesChart, type Band, type Marker, type Point } from "../charts/TimeSeriesChart";
 import { ExerciseEditor } from "../components/ExerciseEditor";
 import { ShareButton } from "../share/ShareDialog";
@@ -265,7 +266,8 @@ function ExerciseDetail({ id }: { id: number }) {
               <Record label="Lifetime volume" value={formatVolume(stats.total_volume_kg, unit)} />
             </div>
           )}
-          {tab === "charts" && (
+          {tab === "charts" && info.kind === "distance_duration" && <CardioCharts exerciseId={id} />}
+          {tab === "charts" && info.kind !== "distance_duration" && (
             <section className="card">
               <div className="chips-row" style={{ marginBottom: 8 }}>
                 {metrics
@@ -382,4 +384,14 @@ function Record({ label, value, sub }: { label: string; value: string; sub?: str
       {sub && <div className="muted small">{sub}</div>}
     </div>
   );
+}
+
+/** Charts for a cardio exercise: pace and totals rather than weights and reps. */
+function CardioCharts({ exerciseId }: { exerciseId: number }) {
+  const [sessions, setSessions] = useState<CardioSession[] | null>(null);
+  useEffect(() => {
+    api.cardioSessions().then((all) => setSessions(all.filter((x) => x.exercise_id === exerciseId)));
+  }, [exerciseId]);
+  if (!sessions) return null;
+  return sessions.length ? <CardioActivity sessions={sessions} /> : <p className="empty">No sessions with a distance or time yet.</p>;
 }

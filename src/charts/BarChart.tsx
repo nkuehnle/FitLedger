@@ -23,6 +23,7 @@ export function BarChart({
   labelEvery,
   fontScale = 1,
   onSelect,
+  goal,
 }: {
   bars: Bar[];
   height?: number;
@@ -34,6 +35,8 @@ export function BarChart({
   labelEvery?: number;
   fontScale?: number;
   onSelect?: (key: string) => void;
+  /** A dashed reference line across the chart (e.g. a weekly goal). */
+  goal?: number;
 }) {
   const auto = useChartTheme();
   const theme = forced ?? auto;
@@ -50,7 +53,7 @@ export function BarChart({
 
   const fs = fontScale;
   const m = { top: 10 * fs, right: (hideNumbers ? 8 : 40) * fs, bottom: 28 * fs, left: 4 * fs };
-  const max = d3.max(bars, (b) => Math.max(b.value, b.target?.[1] ?? 0)) ?? 1;
+  const max = Math.max(goal ?? 0, d3.max(bars, (b) => Math.max(b.value, b.target?.[1] ?? 0)) ?? 1);
   const x = d3
     .scaleBand()
     .domain(bars.map((b) => b.key))
@@ -84,6 +87,9 @@ export function BarChart({
             )}
           </g>
         ))}
+        {goal != null && (
+          <line x1={m.left} x2={width - m.right} y1={y(goal)} y2={y(goal)} stroke={theme.muted} strokeDasharray="4 3" strokeWidth={1.5} />
+        )}
         {bars.map((b, i) => {
           const bx = x(b.key)!;
           const top = y(b.value);

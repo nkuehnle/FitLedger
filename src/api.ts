@@ -129,6 +129,8 @@ export interface SetView {
   duration_s: number | null;
   rest_s: number | null;
   completed: boolean;
+  avg_hr: number | null;
+  kcal: number | null;
 }
 
 export interface ExerciseView {
@@ -178,8 +180,32 @@ export interface Counts {
   weigh_ins: number;
 }
 
+/** One cardio session (an exercise in a finished workout): totals over its segments. */
+export interface CardioSession {
+  workout_id: number;
+  exercise_id: number;
+  name: string;
+  at: string;
+  distance_m: number | null;
+  duration_s: number | null;
+  avg_hr: number | null;
+  kcal: number | null;
+  segments: number;
+}
+
+export interface CardioEntry {
+  exercise_id: number;
+  at: string;
+  distance_m: number | null;
+  duration_s: number | null;
+  avg_hr: number | null;
+  kcal: number | null;
+  notes: string | null;
+}
+
 export interface PrView {
-  kind: "e1rm" | "weight" | "volume" | "rep_max" | "reps";
+  /** Cardio kinds: distance and duration are session totals; pace is speed in m/s. */
+  kind: "e1rm" | "weight" | "volume" | "rep_max" | "reps" | "distance" | "duration" | "pace";
   reps: number | null;
   value: number;
   previous: number | null;
@@ -362,6 +388,8 @@ export interface SetUpdate {
   distance_m?: number | null;
   duration_s?: number | null;
   rpe?: number | null;
+  avg_hr?: number | null;
+  kcal?: number | null;
   completed?: boolean;
 }
 
@@ -567,6 +595,8 @@ export const api = {
   setSetting: (key: string, value: string) => invoke<void>("set_setting", { key, value }),
   /** Android only (no-op elsewhere): weigh-in reminder on weekdays 0 = Sunday … 6 = Saturday. */
   weighInReminder: (days: number[], hour: number, minute: number) => invoke<void>("weigh_in_reminder", { days, hour, minute }),
+  cardioSessions: () => invoke<CardioSession[]>("cardio_sessions"),
+  logCardio: (entry: CardioEntry) => invoke<number>("log_cardio", { entry }),
   /** Weekly backup to Download/Liftbook (Android) if due, or now with `force`; returns where it went. */
   autoBackup: (force: boolean) => invoke<string | null>("auto_backup", { force }),
 

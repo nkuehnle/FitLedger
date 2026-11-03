@@ -96,6 +96,10 @@ export function StartPanel() {
               <span className="muted">Start ›</span>
             </button>
           ))}
+        <a className="start-row" href="#/cardio/log">
+          <span>Log cardio (run, ride, row…)</span>
+          <span className="muted">›</span>
+        </a>
         <button className="start-row" onClick={() => start({ kind: "empty" })}>
           <span>Empty workout</span>
           <span className="muted">Start ›</span>

@@ -5,6 +5,7 @@ import { navigate, usePrefs } from "../App";
 import { ExercisePicker } from "../components/ExercisePicker";
 import { Modal } from "../components/Modal";
 import { RestTimer, useRestTimer } from "../components/RestTimer";
+import { paceMode, paceText } from "../cardio";
 import { EQUIPMENT_LABELS, formatClock, formatWeight, parseLocal, setLabel, toUnit } from "../format";
 
 const KG_PER_LB = 0.45359237;
@@ -467,6 +468,7 @@ function ExerciseBlock({
         </div>
       )}
 
+      {live && kind === "distance_duration" && <CardioStopwatch e={e} onChanged={onChanged} />}
       <table className="set-table">
         <thead>
           <tr className="muted small">
@@ -502,11 +504,12 @@ function ExerciseBlock({
                 label={setLabel(s.set_type, normal)}
                 p={lastTime(s)}
                 suggestKg={suggestFor(s)}
+                name={e.name}
                 kind={kind}
                 live={live}
                 onChanged={onChanged}
                 onError={onError}
-                onCompleted={(done) => onCompleted(e.rest_s ?? 0, s.id, done)}
+                onCompleted={(done) => onCompleted(kind === "distance_duration" ? 0 : (e.rest_s ?? 0), s.id, done)}
               />
             );
           })}
@@ -517,11 +520,13 @@ function ExerciseBlock({
         {!grouped && (
           <>
             <button className="link-btn" onClick={() => run(() => api.addSet(e.id))}>
-              + Set
+              {kind === "distance_duration" ? "+ Segment" : "+ Set"}
             </button>
-            <label className="small muted">
-              Rest <RestSelect value={e.rest_s ?? 0} onChange={(r) => update({ rest_s: r })} />
-            </label>
+            {kind !== "distance_duration" && (
+              <label className="small muted">
+                Rest <RestSelect value={e.rest_s ?? 0} onChange={(r) => update({ rest_s: r })} />
+              </label>
+            )}
           </>
         )}
         <div className="intent" role="group" aria-label="Next time">
@@ -576,12 +581,15 @@ function SetRow({
   onError,
   onCompleted,
   suggestKg,
+  name = "",
 }: {
   s: SetView;
   label: string;
   p?: { weight_kg: number | null; reps: number | null; distance_m: number | null; duration_s: number | null };
   /** Suggested weight for this set (shown in the empty weight box instead of last time's). */
   suggestKg?: number | null;
+  /** Exercise name (cardio: picks pace, speed or /500 m). */
+  name?: string;
   kind: string;
   live: boolean;
   onChanged: () => void;
@@ -630,7 +638,8 @@ function SetRow({
 
   const parseClock = (t: string): number | null => {
     if (!t.trim()) return null;
-    const parts = t.split(":").map(Number);
+    // Accepts "25:30", "1:05:00" and the "45s" shown for short times.
+    const parts = t.trim().replace(/s$/i, "").split(":").map(Number);
     if (parts.some(Number.isNaN)) return null;
     return parts.reduce((acc, v) => acc * 60 + v, 0);
   };
@@ -670,6 +679,7 @@ function SetRow({
   }
 
   return (
+    <>
     <tr className={s.completed ? `done set-${s.set_type}` : `set-${s.set_type}`}>
       <td>
         <select
@@ -717,6 +727,116 @@ function SetRow({
         </button>
       </td>
     </tr>
+    {kind === "distance_duration" && <CardioExtra s={s} values={values(true)} name={name} unit={unit} onChanged={onChanged} />}
+    </>
+  );
+}
+
+/** Under a cardio segment: its pace (or speed) as you type, and optional heart rate and calories. */
+function CardioExtra({
+  s,
+  values,
+  name,
+  unit,
+  onChanged,
+}: {
+  s: SetView;
+  values: { distance_m?: number | null; duration_s?: number | null };
+  name: string;
+  unit: "kg" | "lb";
+  onChanged: () => void;
+}) {
+  const [hr, setHr] = useState(s.avg_hr != null ? String(s.avg_hr) : "");
+  const [kcal, setKcal] = useState(s.kcal != null ? String(Math.round(s.kcal)) : "");
+  const pace = paceText(values.distance_m ?? null, values.duration_s ?? null, paceMode(name), unit);
+  const num = (t: string) => (t.trim() === "" ? null : Number(t));
+  return (
+    <tr className="cardio-extra">
+      <td />
+      <td colSpan={4}>
+        <div className="row small muted cardio-extra-row">
+          <span className="cardio-pace">{pace ?? "pace —"}</span>
+          <label>
+            ♥
+            <input
+              className="input mini-input"
+              inputMode="numeric"
+              placeholder="avg bpm"
+              value={hr}
+              onChange={(x) => setHr(x.target.value)}
+              onBlur={() => num(hr) !== s.avg_hr && api.updateSet(s.id, { avg_hr: num(hr) }).then(onChanged)}
+            />
+          </label>
+          <label>
+            🔥
+            <input
+              className="input mini-input"
+              inputMode="numeric"
+              placeholder="kcal"
+              value={kcal}
+              onChange={(x) => setKcal(x.target.value)}
+              onBlur={() => num(kcal) !== s.kcal && api.updateSet(s.id, { kcal: num(kcal) }).then(onChanged)}
+            />
+          </label>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/** Stopwatch for a cardio exercise: Stop puts the time into the next unfinished segment. The start
+ *  time is kept on the device, so it keeps running if the app is closed. */
+function CardioStopwatch({ e, onChanged }: { e: ExerciseView; onChanged: () => void }) {
+  const key = `cardio-stopwatch:${e.id}`;
+  const read = () => {
+    try {
+      return Number(localStorage.getItem(key)) || null;
+    } catch {
+      return null;
+    }
+  };
+  const [start, setStart] = useState<number | null>(read);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!start) return;
+    const t = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(t);
+  }, [start]);
+  const save = (v: number | null) => {
+    setStart(v);
+    try {
+      if (v) localStorage.setItem(key, String(v));
+      else localStorage.removeItem(key);
+    } catch {
+      /* storage unavailable */
+    }
+  };
+  const stop = async () => {
+    const secs = Math.round((Date.now() - start!) / 1000);
+    save(null);
+    // The next unfinished segment, or a new one when they're all done.
+    const next = e.sets.find((x) => !x.completed)?.id ?? (await api.addSet(e.id));
+    await api.updateSet(next, { duration_s: secs });
+    onChanged();
+  };
+  return (
+    <div className="row small cardio-stopwatch">
+      {start ? (
+        <>
+          <strong className="elapsed">⏱ {formatClock((now - start) / 1000)}</strong>
+          <button className="button small primary" onClick={stop}>
+            ■ Stop
+          </button>
+          <button className="link-btn small" onClick={() => save(null)}>
+            Reset
+          </button>
+        </>
+      ) : (
+        <button className="button small" onClick={() => save(Date.now())}>
+          ▶ Start stopwatch
+        </button>
+      )}
+    </div>
   );
 }
 

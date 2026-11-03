@@ -8,6 +8,7 @@ import PlanPage from "./pages/PlanPage";
 import ReviewPage from "./pages/ReviewPage";
 import SettingsPage from "./pages/SettingsPage";
 import StatsPage from "./pages/StatsPage";
+import CardioPage from "./pages/CardioPage";
 import { loadWeighInPlan, syncWeighInReminder } from "./weighIn";
 import WorkoutPage from "./pages/WorkoutPage";
 
@@ -67,6 +68,7 @@ const TAB_OF: Record<string, string> = {
   today: "history",
   stats: "stats",
   exercises: "stats",
+  cardio: "stats",
   body: "body",
   settings: "settings",
   plan: "settings",
@@ -133,6 +135,9 @@ export default function App() {
       break;
     case "stats":
       page = <StatsPage />;
+      break;
+    case "cardio":
+      page = <CardioPage log={a === "log"} />;
       break;
     case "body":
       page = <BodyPage tab={((a === "fat" ? "inbody" : a) as "weight" | "inbody" | "diet" | "parts") ?? "weight"} part={b} />;

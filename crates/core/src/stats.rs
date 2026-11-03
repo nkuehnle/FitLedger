@@ -18,7 +18,7 @@ use crate::Result;
 use crate::db::Db;
 
 /// Bump when PR detection changes so existing databases rebuild their PR events.
-pub const PR_RULES_VERSION: u32 = 2;
+pub const PR_RULES_VERSION: u32 = 3; // 3: cardio distance, duration and pace PRs
 
 pub const REP_MAX_TARGETS: [i64; 6] = [1, 3, 5, 8, 10, 12];
 
@@ -753,7 +753,9 @@ const EPS: f64 = 1e-6;
 /// The first session of an exercise sets the baseline and is not a PR.
 ///
 /// Kinds: `e1rm`, `weight` (heaviest set), `volume` (session), `rep_max` (heaviest weight for at
-/// least N reps), `reps` (most reps in a set without added weight).
+/// least N reps), `reps` (most reps in a set without added weight); for cardio and timed work
+/// (sets without reps): `distance` and `duration` (session totals) and `pace` (fastest average
+/// speed over a session of at least 400 m, in m/s).
 pub fn detect_prs(sets: &[WorkSet], formula: Formula) -> Vec<PrEvent> {
     #[derive(Default)]
     struct Best {
@@ -762,6 +764,9 @@ pub fn detect_prs(sets: &[WorkSet], formula: Formula) -> Vec<PrEvent> {
         volume: Option<f64>,
         reps_bw: Option<f64>,
         rep_max: HashMap<i64, f64>,
+        distance: Option<f64>,
+        duration: Option<f64>,
+        speed: Option<f64>,
     }
     let mut best: HashMap<i64, Best> = HashMap::new();
     let mut events = Vec::new();
@@ -843,6 +848,29 @@ pub fn detect_prs(sets: &[WorkSet], formula: Formula) -> Vec<PrEvent> {
             emit("reps", None, v, b.reps_bw, Some(s.set_id));
             b.reps_bw = max_opt(b.reps_bw, Some(v));
         }
+        let untimed = working.iter().any(|s| s.reps.unwrap_or(0) > 0);
+        if !untimed {
+            let dist: f64 = working.iter().filter_map(|s| s.distance_m).sum();
+            let time: f64 = working.iter().filter_map(|s| s.duration_s).sum();
+            if dist > 0.0 {
+                emit("distance", None, dist, b.distance, None);
+                b.distance = max_opt(b.distance, Some(dist));
+            }
+            if time > 0.0 {
+                emit("duration", None, time, b.duration, None);
+                b.duration = max_opt(b.duration, Some(time));
+            }
+            // Pace from segments that have both distance and time.
+            let (d, t) = working
+                .iter()
+                .filter(|s| s.distance_m.unwrap_or(0.0) > 0.0 && s.duration_s.unwrap_or(0.0) > 0.0)
+                .fold((0.0, 0.0), |(d, t), s| (d + s.distance_m.unwrap(), t + s.duration_s.unwrap()));
+            if d >= 400.0 {
+                let v = d / t;
+                emit("pace", None, v, b.speed, None);
+                b.speed = max_opt(b.speed, Some(v));
+            }
+        }
     }
     events
 }
@@ -894,6 +922,32 @@ mod tests {
             duration_s: None,
             at: at.into(),
         }
+    }
+
+    #[test]
+    fn cardio_prs() {
+        let run = |we: i64, d: f64, t: f64, at: &str| WorkSet {
+            weight_kg: None,
+            load_kg: None,
+            reps: None,
+            distance_m: Some(d),
+            duration_s: Some(t),
+            ..set(we, 9, 0.0, 0, at)
+        };
+        // 5 km in 30 min, then 6 km in 33 min (longer, longer and faster), then 3 km in 15 min (faster only).
+        let sets = vec![
+            run(1, 5000.0, 1800.0, "2025-01-01 10:00:00"),
+            run(2, 6000.0, 1980.0, "2025-01-08 10:00:00"),
+            run(3, 3000.0, 900.0, "2025-01-15 10:00:00"),
+        ];
+        let kinds = |w: i64| -> Vec<&str> {
+            let mut k: Vec<_> = detect_prs(&sets, Formula::Epley).into_iter().filter(|e| e.workout_id == w).map(|e| e.kind).collect();
+            k.sort();
+            k
+        };
+        assert!(kinds(1).is_empty(), "the first session is the baseline");
+        assert_eq!(kinds(2), ["distance", "duration", "pace"]);
+        assert_eq!(kinds(3), ["pace"]);
     }
 
     #[test]
