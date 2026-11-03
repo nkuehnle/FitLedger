@@ -148,11 +148,20 @@ export default function WorkoutPage({ id, mode }: { id: number; mode: "live" | "
                 live={mode === "live"}
                 onChanged={reload}
                 onError={setError}
+                grouped={g.superset !== null}
                 onCompleted={(rest, setId, done) => {
                   if (mode !== "live") return;
                   if (!done) {
                     if (restSet.current === setId && timer.endsAt) timer.stop();
                     return;
+                  }
+                  // In a superset you go straight to the partner; the shared rest starts once
+                  // every exercise has done this round.
+                  if (g.superset !== null) {
+                    const ticked = (x: ExerciseView) => x.sets.filter((s) => s.completed).length + (x.id === e.id ? 1 : 0);
+                    const round = ticked(e);
+                    if (g.items.some((x) => ticked(x) < round)) return;
+                    rest = Math.max(...g.items.map((x) => x.rest_s ?? 0));
                   }
                   if (rest > 0) {
                     restSet.current = setId;
@@ -160,10 +169,24 @@ export default function WorkoutPage({ id, mode }: { id: number; mode: "live" | "
                   }
                 }}
                 onSwap={() => setPicker({ kind: "swap", we: e })}
-                onSuperset={nextOf(e) ? () => run(() => api.reorderExercises(w.id, groupWithNext(w.exercises, e.id))) : undefined}
+                onSuperset={nextOf(e) ? () => run(() => makeSuperset(w.id, w.exercises, e.id)) : undefined}
                 onUnsuperset={e.superset !== null ? () => run(() => api.reorderExercises(w.id, ungroup(w.exercises, e.id))) : undefined}
               />
             ))}
+            {g.superset !== null && (
+              <div className="exercise-actions superset-actions">
+                <button className="link-btn" onClick={() => run(() => Promise.all(g.items.map((x) => api.addSet(x.id))))}>
+                  + Round
+                </button>
+                <label className="small muted">
+                  Rest after round{" "}
+                  <RestSelect
+                    value={Math.max(...g.items.map((x) => x.rest_s ?? 0))}
+                    onChange={(r) => run(() => Promise.all(g.items.map((x) => api.updateWorkoutExercise(x.id, { rest_s: r }))))}
+                  />
+                </label>
+              </div>
+            )}
           </section>
         ))}
       </div>
@@ -231,6 +254,16 @@ function groupWithNext(exercises: ExerciseView[], id: number): Order {
   return exercises.map((x, j) => ({ workout_exercise_id: x.id, superset: j === i || j === i + 1 ? g : x.superset }));
 }
 
+/** Groups an exercise with the next one, then evens out their sets (a superset is done in rounds). */
+async function makeSuperset(workoutId: number, exercises: ExerciseView[], id: number) {
+  const order = groupWithNext(exercises, id);
+  await api.reorderExercises(workoutId, order);
+  const g = order.find((o) => o.workout_exercise_id === id)!.superset;
+  const members = exercises.filter((x) => order.find((o) => o.workout_exercise_id === x.id)!.superset === g);
+  const rounds = Math.max(...members.map((x) => x.sets.length));
+  for (const x of members) for (let n = x.sets.length; n < rounds; n++) await api.addSet(x.id);
+}
+
 function ungroup(exercises: ExerciseView[], id: number): Order {
   return exercises.map((x) => ({ workout_exercise_id: x.id, superset: x.id === id ? null : x.superset }));
 }
@@ -243,6 +276,20 @@ function groupSupersets(exercises: ExerciseView[]) {
     else out.push({ superset: e.superset, items: [e] });
   }
   return out;
+}
+
+const REST_CHOICES = [0, 15, 30, 45, 60, 75, 90, 105, 120, 150, 180, 240, 300];
+
+function RestSelect({ value, onChange }: { value: number; onChange: (s: number) => void }) {
+  return (
+    <select className="select inline" value={value} onChange={(x) => onChange(Number(x.target.value))}>
+      {REST_CHOICES.concat(value && !REST_CHOICES.includes(value) ? [value] : []).map((r) => (
+        <option key={r} value={r}>
+          {r === 0 ? "off" : formatClock(r)}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 function Elapsed({ start }: { start: string }) {
@@ -291,6 +338,7 @@ function ExerciseBlock({
   onSwap,
   onSuperset,
   onUnsuperset,
+  grouped,
 }: {
   e: ExerciseView;
   prev?: Previous;
@@ -302,6 +350,8 @@ function ExerciseBlock({
   onSwap: () => void;
   onSuperset?: () => void;
   onUnsuperset?: () => void;
+  /** In a superset: rounds and rest are set once for the group. */
+  grouped?: boolean;
 }) {
   const { unit } = usePrefs();
   const [more, setMore] = useState(false);
@@ -444,21 +494,16 @@ function ExerciseBlock({
       </table>
 
       <div className="exercise-actions">
-        <button className="link-btn" onClick={() => run(() => api.addSet(e.id))}>
-          + Set
-        </button>
-        <label className="small muted">
-          Rest{" "}
-          <select className="select inline" value={e.rest_s ?? 0} onChange={(x) => update({ rest_s: Number(x.target.value) })}>
-            {[0, 15, 30, 45, 60, 75, 90, 105, 120, 150, 180, 240, 300]
-              .concat(e.rest_s && ![0, 15, 30, 45, 60, 75, 90, 105, 120, 150, 180, 240, 300].includes(e.rest_s) ? [e.rest_s] : [])
-              .map((r) => (
-                <option key={r} value={r}>
-                  {r === 0 ? "off" : formatClock(r)}
-                </option>
-              ))}
-          </select>
-        </label>
+        {!grouped && (
+          <>
+            <button className="link-btn" onClick={() => run(() => api.addSet(e.id))}>
+              + Set
+            </button>
+            <label className="small muted">
+              Rest <RestSelect value={e.rest_s ?? 0} onChange={(r) => update({ rest_s: r })} />
+            </label>
+          </>
+        )}
         <div className="intent" role="group" aria-label="Next time">
           <span className="small muted">Next time</span>
           {(["down", "hold", "up"] as const).map((v) => (

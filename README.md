@@ -76,10 +76,11 @@ are trained on Google Research's HierText dataset and licensed CC BY-SA 4.0 (see
 
 ### Body fat estimates
 
-Measure → Body fat plots body fat from InBody scans, body fat logged in Strong, and two tape
+Measure → Body comp plots body fat from InBody scans, body fat logged in Strong, and two tape
 estimates: the US Navy method (waist and neck, plus hips for women, measured within two weeks)
-and relative fat mass (height and waist). Lean mass is weight × (1 − body fat) at the nearest
-weigh-in, next to InBody's fat-free and skeletal muscle mass (`src/bodyfat.ts`).
+and relative fat mass (height and waist). At each estimate, weight at the nearest weigh-in gives
+lean mass (weight × (1 − body fat)), fat mass and skeletal muscle (lean × the muscle share of
+lean mass on your InBody scans, else 0.56), charted next to the InBody readings (`src/bodyfat.ts`).
 
 ## Development
 

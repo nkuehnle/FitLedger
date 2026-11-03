@@ -1100,6 +1100,16 @@ textarea {
   color: var(--muted);
   margin-bottom: 4px;
 }
+/* One "+ Round / Rest after round" row for the whole superset. */
+.superset-actions {
+  grid-column: 1 / -1;
+  border-top: 1px dashed var(--border);
+  margin-top: 8px;
+  padding-top: 6px;
+}
+.superset-card .exercise-live + .exercise-live {
+  margin-top: 8px;
+}
 .exercise-live + .exercise-live {
   border-top: 1px dashed var(--border);
   margin-top: 12px;

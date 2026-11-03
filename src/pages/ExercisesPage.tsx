@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type ExerciseInfo, type ExerciseStats, type Muscle, type Phase, type WeighInRow } from "../api";
 import { navigate, usePrefs } from "../App";
-import { RangePicker, inRange, presetRange, type Range } from "../charts/RangePicker";
+import { RangePicker, inRange, useSavedRange } from "../charts/RangePicker";
 import { TimeSeriesChart, type Band, type Marker, type Point } from "../charts/TimeSeriesChart";
 import { ExerciseEditor } from "../components/ExerciseEditor";
 import { ShareButton } from "../share/ShareDialog";
@@ -115,7 +115,7 @@ function ExerciseDetail({ id }: { id: number }) {
   const [muscles, setMuscles] = useState<Muscle[]>([]);
   const [phases, setPhases] = useState<Phase[]>([]);
   const [weights, setWeights] = useState<WeighInRow[]>([]);
-  const [range, setRange] = useState<Range>(presetRange("all"));
+  const [range, setRange] = useSavedRange("exercise");
   const [metric, setMetric] = useState<Metric>("e1rm");
   const [editing, setEditing] = useState(false);
   const [sessionsShown, setSessionsShown] = useState(10);

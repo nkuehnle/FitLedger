@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Phase } from "../api";
 
 export interface Range {
@@ -39,6 +40,30 @@ export const PRESETS: Range[] = [
 
 export function presetRange(key: string): Range {
   return PRESETS.find((p) => p.key === key) ?? PRESETS[PRESETS.length - 1];
+}
+
+/** A chart's range, remembered on this device per `key` (presets re-resolve so "4 weeks" stays
+ *  relative to today). Falls back to all time. */
+export function useSavedRange(key: string): [Range, (r: Range) => void] {
+  const storageKey = `range:${key}`;
+  const [range, setRange] = useState<Range>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey) ?? "null") as Range | null;
+      if (saved?.key) return PRESETS.some((p) => p.key === saved.key) ? presetRange(saved.key) : saved;
+    } catch {
+      /* storage unavailable */
+    }
+    return presetRange("all");
+  });
+  const set = (r: Range) => {
+    setRange(r);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(r));
+    } catch {
+      /* storage unavailable */
+    }
+  };
+  return [range, set];
 }
 
 export function phaseRange(p: Phase): Range {

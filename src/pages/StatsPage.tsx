@@ -19,7 +19,7 @@ import { BodyMap, HeatLegend, LoadLegend } from "../charts/BodyMap";
 import { MuscleWeekGrid } from "../charts/MuscleWeekGrid";
 import { ProgressHealth } from "../components/ProgressHealth";
 import { CalendarHeatmap } from "../charts/CalendarHeatmap";
-import { RangePicker, inRange, isoDate, phaseRange, presetRange, today, type Range } from "../charts/RangePicker";
+import { RangePicker, inRange, isoDate, phaseRange, presetRange, today, type Range, useSavedRange } from "../charts/RangePicker";
 import { ScatterChart } from "../charts/ScatterChart";
 import { TargetRange } from "../charts/TargetRange";
 import { ProgressHeader } from "../components/ProgressHeader";
@@ -29,7 +29,7 @@ import { ShareButton } from "../share/ShareDialog";
 import { formatVolume, parseLocal, toUnit } from "../format";
 
 export default function StatsPage() {
-  const [range, setRange] = useState<Range>(presetRange("all"));
+  const [range, setRange] = useSavedRange("progress");
   const [phases, setPhases] = useState<Phase[]>([]);
   const [groups, setGroups] = useState<MuscleGroup[]>([]);
   const [muscles, setMuscles] = useState<Muscle[]>([]);

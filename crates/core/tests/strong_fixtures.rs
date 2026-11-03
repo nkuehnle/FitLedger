@@ -219,3 +219,26 @@ fn warmup_sets_and_sticky_notes() {
     db.set_sticky_note(bench, Some("")).unwrap();
     assert_eq!(db.previous_for_workout(w).unwrap()[0].setup_note, None);
 }
+
+#[test]
+fn superset_from_template_gets_even_rounds() {
+    use liftbook_core::live::StartFrom;
+    use liftbook_core::templates::{Template, TemplateExercise};
+    let mut db = Db::open_in_memory().unwrap();
+    let ex = |db: &Db, slug, sets| TemplateExercise {
+        exercise_id: db.exercise_id(slug).unwrap().unwrap(),
+        name: String::new(),
+        superset: Some(0),
+        target_sets: Some(sets),
+        rep_min: None,
+        rep_max: None,
+        rest_s: None,
+        setup_note: None,
+    };
+    let exercises = vec![ex(&db, "bicep-curl-dumbbell", 3), ex(&db, "triceps-pushdown-rope", 4)];
+    let t = db.save_template(&Template { id: None, name: "Arms".into(), notes: None, color: None, exercises, last_done: None }).unwrap();
+    let now = chrono::NaiveDate::from_ymd_opt(2026, 11, 2).unwrap().and_hms_opt(18, 0, 0).unwrap();
+    let w = db.start_workout(&StartFrom::Template { template_id: t }, now, None).unwrap();
+    let d = db.workout_detail(w).unwrap().unwrap();
+    assert_eq!(d.exercises.iter().map(|e| e.sets.len()).collect::<Vec<_>>(), [4, 4]);
+}

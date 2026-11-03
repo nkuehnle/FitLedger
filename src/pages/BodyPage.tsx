@@ -1,3 +1,4 @@
+import * as d3 from "d3";
 import { ask } from "../components/Modal";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -15,7 +16,7 @@ import {
   type WeighInRow,
 } from "../api";
 import { usePrefs } from "../App";
-import { RangePicker, inRange, presetRange, today, type Range } from "../charts/RangePicker";
+import { RangePicker, inRange, today, useSavedRange } from "../charts/RangePicker";
 import { TimeSeriesChart, type Band, type Point } from "../charts/TimeSeriesChart";
 import { useChartTheme } from "../charts/theme";
 import { BodyFatTab } from "../components/BodyFatTab";
@@ -26,7 +27,7 @@ import { GOAL_TEXT, goalStatus, type GoalInfo } from "../goal";
 import { fileToBase64 } from "../platform";
 
 const KG_PER_LB = 0.45359237;
-type Tab = "weight" | "inbody" | "diet" | "parts" | "fat";
+type Tab = "weight" | "inbody" | "diet" | "parts";
 
 export default function BodyPage({ tab, part }: { tab: Tab; part?: string }) {
   return (
@@ -34,16 +35,21 @@ export default function BodyPage({ tab, part }: { tab: Tab; part?: string }) {
       <h1 className="page-title">Measure</h1>
       <GoalPanel />
       <div className="segmented tabs-scroll">
-        {(["weight", "parts", "fat", "inbody", "diet"] as Tab[]).map((t) => (
+        {(["weight", "parts", "inbody", "diet"] as Tab[]).map((t) => (
           <a key={t} href={`#/body/${t}`} className={tab === t ? "seg-link active" : "seg-link"}>
-            {{ weight: "Weight", parts: "Body parts", fat: "Body fat", inbody: "Body comp", diet: "Calories" }[t]}
+            {{ weight: "Weight", parts: "Body parts", inbody: "Body comp", diet: "Calories" }[t]}
           </a>
         ))}
       </div>
       {tab === "weight" && <BodyweightTab />}
       {tab === "parts" && <BodyPartsTab part={part} />}
-      {tab === "fat" && <BodyFatTab />}
-      {tab === "inbody" && <InBodyTab />}
+      {/* Body comp: body fat and muscle/fat mass (measured and estimated), then InBody scans. */}
+      {tab === "inbody" && (
+        <>
+          <BodyFatTab />
+          <InBodyTab />
+        </>
+      )}
       {tab === "diet" && <DietTab />}
     </div>
   );
@@ -315,7 +321,7 @@ function BodyweightTab() {
   const { unit } = usePrefs();
   const [rows, setRows] = useState<WeighInRow[]>([]);
   const [phases, setPhases] = useState<Phase[]>([]);
-  const [range, setRange] = useState<Range>(presetRange("all"));
+  const [range, setRange] = useSavedRange("bodyweight");
   const [showInbody, setShowInbody] = useState(true);
   const [entry, setEntry] = useState("");
   const [hide, setHide] = useState(false);
@@ -561,7 +567,6 @@ function InBodyTab() {
     !f ? "" : f.unit === "kg" ? unit : f.unit === "pct" ? "%" : f.unit === "l" ? "L" : f.unit === "kcal" ? "kcal" : "";
   const series = (c: string): Point[] =>
     scans.filter((s) => s.values[c] != null).map((s) => ({ t: parseLocal(s.measured_at_local), v: conv(fieldOf(c), s.values[c]) }));
-  const latest = scans[scans.length - 1];
   const available = fields.filter(
     (f) => scans.some((s) => s.values[f.column] != null) && !f.column.startsWith("lean_") && !f.column.startsWith("fat_"),
   );
@@ -664,21 +669,9 @@ function InBodyTab() {
         <>
           <section className="card">
             <div className="title-row">
-              <h2 className="section-title">Muscle vs fat</h2>
+              <h2 className="section-title">InBody: any metric</h2>
               <ShareButton kind="inbody" />
             </div>
-            <TimeSeriesChart
-              series={[
-                { id: "smm", label: "Skeletal muscle mass", points: series("smm_kg") },
-                { id: "bfm", label: "Body fat mass", points: series("body_fat_mass_kg") },
-              ]}
-              unit={unit}
-              bands={bandsOf(phases)}
-              height={240}
-            />
-          </section>
-          <section className="card">
-            <h2 className="section-title">Any metric</h2>
             <select className="select" value={metric} onChange={(e) => setMetric(e.target.value)}>
               {available.map((f) => (
                 <option key={f.column} value={f.column}>
@@ -693,7 +686,7 @@ function InBodyTab() {
               height={220}
             />
           </section>
-          {latest && <Segmental scan={latest} unit={unit} />}
+          <Segmental scans={scans} unit={unit} />
           <section className="card">
             <div className="section-label">Scans</div>
             {[...scans].reverse().map((s) => (
@@ -759,44 +752,42 @@ const SEGMENTS: [string, string][] = [
   ["left_leg", "Left leg"],
 ];
 
-/** Segmental lean mass on a simple figure (viewer's left is the body's right, as on the InBody sheet). */
-function Segmental({ scan, unit }: { scan: InBodyScan; unit: "kg" | "lb" }) {
+/** Segmental lean or fat mass of the latest scan: one bar per segment on a shared scale, with the
+ *  normal range when the sheet gives "% of normal", and each segment's change since the first scan. */
+function Segmental({ scans, unit }: { scans: InBodyScan[]; unit: "kg" | "lb" }) {
   const theme = useChartTheme();
   const [kind, setKind] = useState<"lean" | "fat">("lean");
-  const val = (seg: string) => scan.values[`${kind}_${seg}_kg`];
+  const kgOf = (x: InBodyScan, seg: string) => x.values[`${kind}_${seg}_kg`];
+  const withData = scans.filter((x) => SEGMENTS.some(([seg]) => kgOf(x, seg) != null));
+  if (!withData.length) return null;
+  const scan = withData[withData.length - 1];
+  const first = withData[0];
   const pct = (seg: string) => scan.values[`${kind}_${seg}_pct`];
-  const has = SEGMENTS.some(([s]) => val(s) != null || pct(s) != null);
-  if (!has) return null;
-  // Color by % of ideal when present, else relative to the largest segment of the same type.
-  const level = (seg: string) => {
-    const p = pct(seg);
-    if (p != null) return Math.max(0, Math.min(1, (p - 70) / 60));
-    const limbs = seg === "trunk" ? [val("trunk")] : SEGMENTS.filter(([s]) => s !== "trunk").map(([s]) => val(s));
-    const max = Math.max(...limbs.filter((x): x is number => x != null));
-    return val(seg) != null ? val(seg)! / max : 0;
-  };
-  const steps = theme.sequential.slice(2);
-  const color = (seg: string) => steps[Math.round(level(seg) * (steps.length - 1))];
-  const label = (seg: string) =>
-    [val(seg) != null ? `${toUnit(val(seg)!, unit).toFixed(1)} ${unit}` : null, pct(seg) != null ? `${pct(seg)}%` : null]
-      .filter(Boolean)
-      .join(" · ");
-  const diff = (a: string, b: string) => (val(a) != null && val(b) != null ? toUnit(val(a)! - val(b)!, unit) : null);
-  const armDiff = diff("right_arm", "left_arm");
-  const legDiff = diff("right_leg", "left_leg");
-  const shapes: Record<string, string> = {
-    right_arm: "M40,60 L58,58 L56,150 L42,150 Z",
-    left_arm: "M160,60 L142,58 L144,150 L158,150 Z",
-    trunk: "M62,52 L138,52 L132,150 L68,150 Z",
-    right_leg: "M70,154 L98,154 L94,280 L74,280 Z",
-    left_leg: "M130,154 L102,154 L106,280 L126,280 Z",
-  };
+  // Lean mass on the InBody sheet comes with "% of normal"; otherwise bars show kg.
+  const usePct = SEGMENTS.every(([seg]) => pct(seg) != null);
+  const rows = SEGMENTS.map(([seg, name]) => {
+    const kg = kgOf(scan, seg);
+    const was = first !== scan ? kgOf(first, seg) : undefined;
+    return { seg, name, kg, pct: pct(seg), delta: kg != null && was != null ? kg - was : null };
+  });
+  const values = rows.map((r) => (usePct ? r.pct : r.kg)).filter((v): v is number => v != null);
+  const domain: [number, number] = usePct
+    ? [Math.min(60, d3.min(values)! - 10), Math.max(160, d3.max(values)! + 10)]
+    : [0, d3.max(values)! * 1.1];
+  const W = 340;
+  const labelW = 74;
+  const valueW = 112;
+  const rowH = 30;
+  const top = 20;
+  const x = d3.scaleLinear(domain, [labelW, W - valueW]);
+  const H = top + rows.length * rowH + 4;
+  const ticks = usePct ? [80, 100, 120, 140].filter((t) => t > domain[0] && t < domain[1]) : x.ticks(4);
+  const fill = kind === "lean" ? theme.categorical[0] : theme.categorical[1];
+  const delta = (d: number | null) => (d == null || Math.abs(d) < 0.005 ? "" : ` (${d > 0 ? "+" : "−"}${Math.abs(toUnit(d, unit)).toFixed(1)})`);
   return (
     <section className="card">
       <div className="title-row">
-        <h2 className="section-title">
-          Segmental {kind === "lean" ? "lean" : "fat"} mass · {formatDate(scan.measured_at_local)}
-        </h2>
+        <h2 className="section-title">Segmental {kind} mass</h2>
         <div className="segmented small">
           <button className={kind === "lean" ? "active" : ""} onClick={() => setKind("lean")}>
             Lean
@@ -806,46 +797,51 @@ function Segmental({ scan, unit }: { scan: InBodyScan; unit: "kg" | "lb" }) {
           </button>
         </div>
       </div>
-      <div className="segmental">
-        <svg viewBox="0 0 200 300" height={260}>
-          <circle cx={100} cy={30} r={18} fill={theme.grid} />
-          {SEGMENTS.map(([s]) => (
-            <path
-              key={s}
-              d={shapes[s]}
-              fill={val(s) != null || pct(s) != null ? color(s) : theme.grid}
-              stroke={theme.surface}
-              strokeWidth={2}
-            />
-          ))}
-          <text x={20} y={296} fontSize={10} fill={theme.muted}>
-            R
-          </text>
-          <text x={174} y={296} fontSize={10} fill={theme.muted}>
-            L
-          </text>
-        </svg>
-        <ul className="seg-list small">
-          {SEGMENTS.map(([s, n]) => (
-            <li key={s}>
-              <span>{n}</span>
-              <strong>{label(s) || "—"}</strong>
-            </li>
-          ))}
-          {armDiff != null && (
-            <li className="muted">
-              Arms: right {armDiff >= 0 ? "+" : "−"}
-              {Math.abs(armDiff).toFixed(2)} {unit} vs left
-            </li>
-          )}
-          {legDiff != null && (
-            <li className="muted">
-              Legs: right {legDiff >= 0 ? "+" : "−"}
-              {Math.abs(legDiff).toFixed(2)} {unit} vs left
-            </li>
-          )}
-        </ul>
-      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", maxWidth: 560 }} fontFamily="system-ui, sans-serif">
+        {usePct && (
+          <>
+            {/* InBody's normal range for segmental lean mass is about 90–110 % of ideal. */}
+            <rect x={x(90)} y={top - 4} width={x(110) - x(90)} height={H - top} fill={theme.grid} />
+            <text x={(x(90) + x(110)) / 2} y={top - 8} fontSize={9} fill={theme.muted} textAnchor="middle">
+              normal
+            </text>
+          </>
+        )}
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={x(t)} x2={x(t)} y1={top - 4} y2={H} stroke={t === 100 && usePct ? theme.muted : theme.gridStrong} strokeDasharray={t === 100 && usePct ? undefined : "2 3"} />
+            {!(usePct && t === 100) && (
+              <text x={x(t)} y={top - 8} fontSize={9} fill={theme.muted} textAnchor="middle">
+                {usePct ? `${t}%` : toUnit(t, unit).toFixed(0)}
+              </text>
+            )}
+          </g>
+        ))}
+        {rows.map((r, i) => {
+          const y = top + i * rowH;
+          const v = usePct ? r.pct : r.kg;
+          return (
+            <g key={r.seg}>
+              <text x={0} y={y + rowH / 2 + 4} fontSize={11.5} fill={theme.text}>
+                {r.name}
+              </text>
+              {v != null && (
+                <rect x={x(domain[0])} y={y + 7} width={Math.max(2, x(v) - x(domain[0]))} height={rowH - 14} rx={3} fill={fill} />
+              )}
+              <text x={W} y={y + rowH / 2 + 4} fontSize={11} fill={theme.text} textAnchor="end">
+                {r.kg != null ? `${toUnit(r.kg, unit).toFixed(1)} ${unit}` : "—"}
+                {usePct && r.pct != null ? ` · ${r.pct}%` : ""}
+                <tspan fill={theme.muted}>{delta(r.delta)}</tspan>
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <p className="muted small">
+        {formatDate(scan.measured_at_local)}
+        {first !== scan ? ` · changes in brackets since ${formatDate(first.measured_at_local)}` : ""}
+        {usePct ? " · bars are % of the ideal for your height (InBody), shaded band is normal" : ""}
+      </p>
     </section>
   );
 }
@@ -1099,7 +1095,7 @@ function DietTab() {
   const [days, setDays] = useState<DietDay[]>([]);
   const [energy, setEnergy] = useState<EnergyPoint[]>([]);
   const [window_, setWindow] = useState(14);
-  const [range, setRange] = useState<Range>(presetRange("all"));
+  const [range, setRange] = useSavedRange("diet");
   const [phases, setPhases] = useState<Phase[]>([]);
   const [date, setDate] = useState(today());
   const load = () => {

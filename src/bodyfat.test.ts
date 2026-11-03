@@ -3,6 +3,13 @@ import type { MeasurementRow, WeighInRow } from "./api";
 import { bodyFatSeries, navyBodyFat, relativeFatMass } from "./bodyfat";
 
 describe("body fat estimates", () => {
+  it("takes the muscle share of lean mass from InBody scans", () => {
+    const scan = { id: 1, measured_at_local: "2026-01-01 08:00:00", device: null, notes: null, values: { smm_kg: 40, fat_free_mass_kg: 70 } };
+    const s = bodyFatSeries([], [scan], [], "male", 178);
+    expect(s.muscleShareFromScans).toBe(true);
+    expect(s.muscleShare).toBeCloseTo(40 / 70);
+  });
+
   it("Navy method matches the published formula", () => {
     // 178 cm, waist 86, neck 38 → ~17.2 %
     expect(navyBodyFat("male", 178, 86, 38)).toBeCloseTo(17.2, 1);
@@ -27,5 +34,9 @@ describe("body fat estimates", () => {
     expect(s.rfm).toHaveLength(2);
     expect(s.navy).toHaveLength(1);
     expect(s.leanEstimated[0].v).toBeCloseTo(80 * (1 - 0.172), 0);
+    expect(s.fatEstimated[0].v).toBeCloseTo(80 * 0.172, 0);
+    // No scans: muscle is the typical 56 % of lean mass.
+    expect(s.muscleShareFromScans).toBe(false);
+    expect(s.smmEstimated[0].v).toBeCloseTo(s.leanEstimated[0].v * 0.56, 5);
   });
 });

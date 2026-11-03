@@ -33,7 +33,17 @@ export interface BodyFatSeries {
   leanEstimated: Pt[];
   leanMeasured: Pt[];
   smm: Pt[];
+  /** Skeletal muscle estimated as lean mass × your InBody muscle share (see `muscleShare`). */
+  smmEstimated: Pt[];
+  /** Fat mass in kg: weight × body fat, and InBody's reading. */
+  fatEstimated: Pt[];
+  fatMeasured: Pt[];
+  /** Skeletal muscle ÷ fat-free mass: averaged over your scans, else a typical 0.56. */
+  muscleShare: number;
+  muscleShareFromScans: boolean;
 }
+
+const TYPICAL_MUSCLE_SHARE = 0.56;
 
 const DAY = 86400000;
 
@@ -76,10 +86,17 @@ export function bodyFatSeries(
     }
   }
   const logged = part("body_fat_pct");
+  const shares = scans
+    .filter((x) => x.values.smm_kg && x.values.fat_free_mass_kg)
+    .map((x) => x.values.smm_kg / x.values.fat_free_mass_kg);
+  const muscleShare = shares.length ? shares.reduce((a, b) => a + b, 0) / shares.length : TYPICAL_MUSCLE_SHARE;
   const leanEstimated: Pt[] = [];
+  const fatEstimated: Pt[] = [];
   for (const p of [...navy, ...logged].sort((a, b) => +a.t - +b.t)) {
     const kg = nearest(weights, p.t, 7);
-    if (kg != null) leanEstimated.push({ t: p.t, v: kg * (1 - p.v / 100) });
+    if (kg == null) continue;
+    leanEstimated.push({ t: p.t, v: kg * (1 - p.v / 100) });
+    fatEstimated.push({ t: p.t, v: (kg * p.v) / 100 });
   }
   const by = (a: Pt, b: Pt) => +a.t - +b.t;
   return {
@@ -90,5 +107,10 @@ export function bodyFatSeries(
     leanEstimated,
     leanMeasured: scanPts("fat_free_mass_kg").sort(by),
     smm: scanPts("smm_kg").sort(by),
+    smmEstimated: leanEstimated.map((p) => ({ t: p.t, v: p.v * muscleShare })),
+    fatEstimated,
+    fatMeasured: scanPts("body_fat_mass_kg").sort(by),
+    muscleShare,
+    muscleShareFromScans: shares.length > 0,
   };
 }

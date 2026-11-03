@@ -1,6 +1,8 @@
 //! Live workouts and workout editing. A live workout is a `workout` row with `finished = 0`;
 //! the same operations edit finished workouts from history.
 
+use std::collections::HashMap;
+
 use chrono::NaiveDateTime;
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
@@ -217,15 +219,27 @@ impl Db {
                     .query_map([template_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)))?
                     .collect::<rusqlite::Result<_>>()?;
                 drop(stmt);
-                for (pos, (ex, superset, ts, rmin, rmax, rest)) in rows.into_iter().enumerate() {
-                    let rest = self.remembered_rest(ex, Some(*template_id), rest)?;
-                    let sets = match ts {
+                let mut counts = Vec::with_capacity(rows.len());
+                for &(ex, _, ts, ..) in &rows {
+                    counts.push(match ts {
                         Some(n) => n,
                         None => match self.last_session_of(ex, Some(*template_id), None)? {
                             Some(we) => self.set_count(we)?,
                             None => DEFAULT_SETS,
                         },
-                    };
+                    });
+                }
+                // A superset is done in rounds: every exercise in it gets the group's largest set count.
+                let mut rounds: HashMap<i64, i64> = HashMap::new();
+                for (row, &n) in rows.iter().zip(&counts) {
+                    if let Some(g) = row.1 {
+                        let r = rounds.entry(g).or_insert(0);
+                        *r = (*r).max(n);
+                    }
+                }
+                for (pos, ((ex, superset, ts, rmin, rmax, rest), n)) in rows.into_iter().zip(counts).enumerate() {
+                    let rest = self.remembered_rest(ex, Some(*template_id), rest)?;
+                    let sets = superset.map_or(n, |g| rounds[&g]);
                     self.insert_exercise(workout_id, pos as i64, superset, ex, rest, (ts, rmin, rmax), sets)?;
                 }
             }
