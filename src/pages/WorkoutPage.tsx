@@ -287,21 +287,6 @@ function suggestedWeight(p: NonNullable<Previous["progression"]>, unit: "kg" | "
   return unit === "lb" ? rounded * KG_PER_LB : rounded;
 }
 
-/** One line at the top of an exercise: what to do this time, and why. */
-function ProgressionNote({ p, unit, onUse }: { p: NonNullable<Previous["progression"]>; unit: "kg" | "lb"; onUse: (kg: number) => void }) {
-  const kg = suggestedWeight(p, unit);
-  const arrow = p.kind === "increase" ? "↑" : "↓";
-  return (
-    <div className="hint">
-      {arrow} {formatWeight(kg, unit)} {unit}
-      {p.kind === "deload" ? " (deload)" : ""} · {p.reason}{" "}
-      <button className="link-btn" onClick={() => onUse(kg)}>
-        Use
-      </button>
-    </div>
-  );
-}
-
 const REST_CHOICES = [0, 15, 30, 45, 60, 75, 90, 105, 120, 150, 180, 240, 300];
 
 function RestSelect({ value, onChange }: { value: number; onChange: (s: number) => void }) {
@@ -386,8 +371,20 @@ function ExerciseBlock({
       .then(onChanged)
       .catch((x) => onError(String(x)));
   const update = (u: Parameters<typeof api.updateWorkoutExercise>[1]) => run(() => api.updateWorkoutExercise(e.id, u));
-  /** Puts a suggested weight into every set not ticked yet. */
-  const applyWeight = (kg: number) => run(() => Promise.all(e.sets.filter((x) => !x.completed).map((x) => api.updateSet(x.id, { weight_kg: kg }))));
+  // Last time's values for each set, warm-up to warm-up and working set to working set; working
+  // sets show the suggested weight when there is one (add weight, step down or deload).
+  const warm = (x: { set_type: string }) => x.set_type === "warmup";
+  const suggested = prev?.progression ? suggestedWeight(prev.progression, unit) : null;
+  const lastTime = (s: SetView) => {
+    const same = e.sets.filter((x) => warm(x) === warm(s));
+    return prev?.sets.filter((x) => warm(x) === warm(s))[same.indexOf(s)];
+  };
+  // Only sets done at last time's top weight move; lighter ramp-up sets (and warm-ups) keep theirs.
+  const suggestFor = (s: SetView) => {
+    if (suggested == null || warm(s)) return null;
+    const w = lastTime(s)?.weight_kg;
+    return w == null || Math.abs(w - prev!.progression!.weight_kg) < 0.01 ? suggested : null;
+  };
   const perHand = e.load_mode === "per_hand";
   const kind = e.kind ?? "weight_reps";
   const reps = e.rep_min && e.rep_max && e.rep_min !== e.rep_max ? `${e.rep_min}–${e.rep_max}` : (e.rep_max ?? e.rep_min);
@@ -464,14 +461,9 @@ function ExerciseBlock({
           </button>
         )
       )}
-      {prev && (prev.progression || prev.next_intent === "hold" || prev.notes) && (
+      {prev?.notes && (
         <div className="last-time small">
-          {prev.progression ? (
-            <ProgressionNote p={prev.progression} unit={unit} onUse={(kg) => applyWeight(kg)} />
-          ) : (
-            prev.next_intent === "hold" && <div className="hint">= Stay at this weight · you rated it =</div>
-          )}
-          {prev.notes && <div className="muted">“{prev.notes}”</div>}
+          <div className="muted">“{prev.notes}”</div>
         </div>
       )}
 
@@ -501,14 +493,15 @@ function ExerciseBlock({
           </tr>
         </thead>
         <tbody>
-          {e.sets.map((s, i) => {
+          {e.sets.map((s) => {
             if (s.set_type === "normal" || s.set_type === "failure") normal++;
             return (
               <SetRow
                 key={s.id}
                 s={s}
                 label={setLabel(s.set_type, normal)}
-                p={prev?.sets[i]}
+                p={lastTime(s)}
+                suggestKg={suggestFor(s)}
                 kind={kind}
                 live={live}
                 onChanged={onChanged}
@@ -582,10 +575,13 @@ function SetRow({
   onChanged,
   onError,
   onCompleted,
+  suggestKg,
 }: {
   s: SetView;
   label: string;
   p?: { weight_kg: number | null; reps: number | null; distance_m: number | null; duration_s: number | null };
+  /** Suggested weight for this set (shown in the empty weight box instead of last time's). */
+  suggestKg?: number | null;
   kind: string;
   live: boolean;
   onChanged: () => void;
@@ -617,17 +613,17 @@ function SetRow({
       ? fmtNum(p?.distance_m != null ? p.distance_m / distUnit : null)
       : kind === "duration"
         ? fmtNum(p?.duration_s ?? null, 0)
-        : p?.weight_kg != null
-          ? formatWeight(p.weight_kg, unit)
+        : (suggestKg ?? p?.weight_kg) != null
+          ? formatWeight((suggestKg ?? p?.weight_kg)!, unit)
           : "";
   const placeholderB =
     kind === "distance_duration" ? (p?.duration_s != null ? formatClock(p.duration_s) : "") : p?.reps != null ? String(p.reps) : "";
   const prevText = !p
     ? "—"
     : kind === "distance_duration"
-      ? `${placeholderA} · ${placeholderB}`
+      ? `${fmtNum(p.distance_m != null ? p.distance_m / distUnit : null)} · ${placeholderB}`
       : kind === "duration"
-        ? `${placeholderA}s`
+        ? `${fmtNum(p.duration_s, 0)}s`
         : p.weight_kg
           ? `${formatWeight(p.weight_kg, unit)} × ${p.reps ?? "?"}`
           : `${p.reps ?? "?"} reps`;

@@ -204,6 +204,17 @@ impl Db {
         )?)
     }
 
+    fn warmup_count(&self, workout_exercise_id: Option<i64>) -> Result<i64> {
+        let Some(we) = workout_exercise_id else { return Ok(0) };
+        Ok(self.conn().query_row(
+            "SELECT COUNT(*) FROM workout_set WHERE workout_exercise_id = ?1 AND set_type = 'warmup'",
+            [we],
+            |r| r.get(0),
+        )?)
+    }
+
+    /// Adds an exercise with `warmups` warm-up sets followed by `sets` working sets.
+    #[allow(clippy::too_many_arguments)]
     fn insert_exercise(
         &self,
         workout_id: i64,
@@ -212,6 +223,7 @@ impl Db {
         exercise_id: i64,
         rest_s: i64,
         target: (Option<i64>, Option<i64>, Option<i64>),
+        warmups: i64,
         sets: i64,
     ) -> Result<i64> {
         let name: String = self.conn().query_row("SELECT name FROM exercise WHERE id = ?1", [exercise_id], |r| r.get(0))?;
@@ -221,10 +233,10 @@ impl Db {
             params![workout_id, position, superset, name, exercise_id, rest_s, target.0, target.1, target.2],
         )?;
         let we = self.conn().last_insert_rowid();
-        for i in 0..sets.max(1) {
+        for i in 0..warmups + sets.max(1) {
             self.conn().execute(
-                "INSERT INTO workout_set (workout_exercise_id, position, set_type, completed) VALUES (?1, ?2, 'normal', 0)",
-                params![we, i],
+                "INSERT INTO workout_set (workout_exercise_id, position, set_type, completed) VALUES (?1, ?2, ?3, 0)",
+                params![we, i, if i < warmups { "warmup" } else { "normal" }],
             )?;
         }
         Ok(we)
@@ -302,7 +314,13 @@ impl Db {
                 for (pos, ((ex, superset, ts, rmin, rmax, rest), n)) in rows.into_iter().zip(counts).enumerate() {
                     let rest = self.remembered_rest(ex, Some(*template_id), rest)?;
                     let sets = superset.map_or(n, |g| rounds[&g]);
-                    self.insert_exercise(workout_id, pos as i64, superset, ex, rest, (ts, rmin, rmax), sets)?;
+                    // Warm-ups as many as last time (target sets count working sets only).
+                    let last = match self.last_session_of(ex, Some(*template_id), None)? {
+                        Some(we) => Some(we),
+                        None => self.last_session_of(ex, None, None)?,
+                    };
+                    let warmups = self.warmup_count(last)?;
+                    self.insert_exercise(workout_id, pos as i64, superset, ex, rest, (ts, rmin, rmax), warmups, sets)?;
                 }
             }
             StartFrom::Repeat { workout_id: src } => {
@@ -316,8 +334,8 @@ impl Db {
                 drop(stmt);
                 for (pos, (we, ex, superset, rest, ts, rmin, rmax)) in rows.into_iter().enumerate() {
                     let rest = rest.unwrap_or(self.remembered_rest(ex, None, None)?);
-                    let sets = self.set_count(we)?;
-                    self.insert_exercise(workout_id, pos as i64, superset, ex, rest, (ts, rmin, rmax), sets)?;
+                    let (warmups, sets) = (self.warmup_count(Some(we))?, self.set_count(we)?);
+                    self.insert_exercise(workout_id, pos as i64, superset, ex, rest, (ts, rmin, rmax), warmups, sets)?;
                 }
             }
         }
@@ -332,16 +350,18 @@ impl Db {
         )?)
     }
 
-    /// Appends an exercise with as many sets as last time (default 3).
+    /// Appends an exercise with as many warm-up and working sets as last time (default 3 working).
     pub fn add_exercise(&mut self, workout_id: i64, exercise_id: i64) -> Result<i64> {
         let template_id: Option<i64> = self.conn().query_row("SELECT template_id FROM workout WHERE id = ?1", [workout_id], |r| r.get(0))?;
-        let sets = match self.last_session_of(exercise_id, None, Some(workout_id))? {
+        let last = self.last_session_of(exercise_id, None, Some(workout_id))?;
+        let sets = match last {
             Some(we) => self.set_count(we)?,
             None => DEFAULT_SETS,
         };
+        let warmups = self.warmup_count(last)?;
         let rest = self.remembered_rest(exercise_id, template_id, None)?;
         let pos = self.next_position(workout_id)?;
-        self.insert_exercise(workout_id, pos, None, exercise_id, rest, (None, None, None), sets)
+        self.insert_exercise(workout_id, pos, None, exercise_id, rest, (None, None, None), warmups, sets)
     }
 
     pub fn remove_exercise(&mut self, workout_exercise_id: i64) -> Result<()> {

@@ -242,3 +242,30 @@ fn superset_from_template_gets_even_rounds() {
     let d = db.workout_detail(w).unwrap().unwrap();
     assert_eq!(d.exercises.iter().map(|e| e.sets.len()).collect::<Vec<_>>(), [4, 4]);
 }
+
+#[test]
+fn perform_again_keeps_warmups_as_warmups() {
+    use liftbook_core::live::{SetUpdate, StartFrom};
+    let mut db = Db::open_in_memory().unwrap();
+    let t = |h| chrono::NaiveDate::from_ymd_opt(2026, 11, 2).unwrap().and_hms_opt(h, 0, 0).unwrap();
+    let w = db.start_workout(&StartFrom::Empty, t(9), None).unwrap();
+    let squat = db.exercise_id("squat-barbell").unwrap().unwrap();
+    db.add_exercise(w, squat).unwrap();
+    let sets: Vec<i64> = db.workout_detail(w).unwrap().unwrap().exercises[0].sets.iter().map(|s| s.id).collect();
+    // 1 warm-up and 2 working sets.
+    for (i, id) in sets.iter().enumerate() {
+        let u = SetUpdate {
+            set_type: Some(if i == 0 { "warmup" } else { "normal" }.into()),
+            weight_kg: Some(Some(if i == 0 { 60.0 } else { 84.0 })),
+            reps: Some(Some(if i == 0 { 10 } else { 8 })),
+            completed: Some(true),
+            ..Default::default()
+        };
+        db.update_set(*id, &u).unwrap();
+    }
+    db.finish_workout(w, t(10)).unwrap();
+    let again = db.start_workout(&StartFrom::Repeat { workout_id: w }, t(18), None).unwrap();
+    let d = db.workout_detail(again).unwrap().unwrap();
+    let types: Vec<&str> = d.exercises[0].sets.iter().map(|s| s.set_type.as_str()).collect();
+    assert_eq!(types, ["warmup", "normal", "normal"]);
+}
