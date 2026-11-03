@@ -98,11 +98,73 @@ pub struct Previous {
     pub sets: Vec<PrevSet>,
     pub notes: Option<String>,
     pub next_intent: Option<String>,
-    /// Every working set last time reached the top of the target rep range.
-    pub suggest_increase: bool,
+    /// General progression hint from recent sessions (add weight, or deload after repeated misses).
+    pub progression: Option<Progression>,
     pub setup_note: Option<String>,
     pub primary: Vec<String>,
     pub secondary: Vec<String>,
+}
+
+/// "Add weight if you can, deload if you keep missing", from the last few sessions.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct Progression {
+    /// "increase", "decrease" (one step, from your ↓ rating) or "deload" (about 10%).
+    pub kind: String,
+    /// Top working weight last time; the app rounds the suggestion to its plate steps.
+    pub weight_kg: f64,
+    pub reason: String,
+}
+
+/// One past session of an exercise: its heaviest working weight and the reps done at it.
+#[derive(Debug, Clone)]
+pub struct SessionTop {
+    pub weight_kg: f64,
+    pub reps: Vec<i64>,
+}
+
+/// Sessions newest first. `rep_range` is the current target, if any; `intent` is the ↑ / = / ↓
+/// rating given last time ("up", "hold", "down"), which takes priority over the numbers, except
+/// that three missed sessions in a row still suggest a deload.
+pub fn progression_hint(sessions: &[SessionTop], rep_range: (Option<i64>, Option<i64>), intent: Option<&str>) -> Option<Progression> {
+    let last = sessions.first()?;
+    if last.weight_kg <= 0.0 || last.reps.is_empty() {
+        return None;
+    }
+    let hint = |kind: &str, reason: &str| Some(Progression { kind: kind.into(), weight_kg: last.weight_kg, reason: reason.into() });
+    match intent {
+        Some("up") => return hint("increase", "you rated it ↑"),
+        Some("down") => return hint("decrease", "you rated it ↓"),
+        _ => {}
+    }
+    let (lo, hi) = rep_range;
+    let total = |s: &SessionTop| s.reps.iter().sum::<i64>();
+    // A miss: short of the rep range, or (no range) fewer reps than the session before at the
+    // same or a heavier weight.
+    let missed = |i: usize| -> bool {
+        let s = &sessions[i];
+        match lo {
+            Some(lo) => s.reps.iter().any(|&r| r < lo),
+            None => sessions.get(i + 1).is_some_and(|p| s.weight_kg >= p.weight_kg - 1e-6 && total(s) < total(p)),
+        }
+    };
+    if sessions.len() >= 3 && (0..3).all(missed) && last.weight_kg >= sessions[2].weight_kg - 1e-6 {
+        return Some(Progression {
+            kind: "deload".into(),
+            weight_kg: last.weight_kg,
+            reason: "missed reps 3 sessions running".into(),
+        });
+    }
+    let up = match hi {
+        Some(hi) => last.reps.iter().all(|&r| r >= hi).then(|| "top of the rep range last time".to_string()),
+        None => sessions.get(1).and_then(|p| {
+            (p.weight_kg > 0.0 && (last.weight_kg - p.weight_kg).abs() < 1e-6 && last.reps.len() >= p.reps.len() && total(last) >= total(p))
+                .then(|| "same weight twice, no reps lost".to_string())
+        }),
+    };
+    if intent == Some("hold") {
+        return None; // you chose to stay at this weight
+    }
+    up.map(|reason| Progression { kind: "increase".into(), weight_kg: last.weight_kg, reason })
 }
 
 /// One entry of a new exercise order: the exercise and its superset group (or none).
@@ -477,6 +539,28 @@ impl Db {
         Ok(())
     }
 
+    /// The last four finished sessions of `exercise_id` before `started` (newest first): top
+    /// working weight and the reps of the working sets at that weight.
+    fn recent_tops(&self, exercise_id: i64, workout_id: i64, started: &str) -> Result<Vec<SessionTop>> {
+        let mut stmt = self.conn().prepare_cached(
+            "SELECT we.id FROM workout_exercise we JOIN workout w ON w.id = we.workout_id
+             WHERE we.exercise_id = ?1 AND w.finished = 1 AND w.id != ?2 AND w.started_at_local <= ?3
+             ORDER BY w.started_at_local DESC LIMIT 4",
+        )?;
+        let ids: Vec<i64> = stmt.query_map(params![exercise_id, workout_id, started], |r| r.get(0))?.collect::<rusqlite::Result<_>>()?;
+        let mut out = Vec::new();
+        for id in ids {
+            let mut ss = self.conn().prepare_cached(
+                "SELECT weight_kg, reps FROM workout_set WHERE workout_exercise_id = ?1 AND set_type IN ('normal', 'failure')
+                 AND weight_kg IS NOT NULL AND reps IS NOT NULL ORDER BY position",
+            )?;
+            let sets: Vec<(f64, i64)> = ss.query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<rusqlite::Result<_>>()?;
+            let Some(top) = sets.iter().map(|s| s.0).reduce(f64::max) else { continue };
+            out.push(SessionTop { weight_kg: top, reps: sets.iter().filter(|s| (s.0 - top).abs() < 1e-6).map(|s| s.1).collect() });
+        }
+        Ok(out)
+    }
+
     /// For each exercise in `workout_id`: the previous session's sets, notes and intent, plus
     /// the exercise's setup note and muscles.
     pub fn previous_for_workout(&self, workout_id: i64) -> Result<Vec<Previous>> {
@@ -496,7 +580,7 @@ impl Db {
                 sets: Vec::new(),
                 notes: None,
                 next_intent: None,
-                suggest_increase: false,
+                progression: None,
                 setup_note,
                 primary: Vec::new(),
                 secondary: Vec::new(),
@@ -507,18 +591,23 @@ impl Db {
                     let (m, role) = row?;
                     if role == "primary" { prev.primary.push(m) } else { prev.secondary.push(m) }
                 }
-                let last: Option<(i64, String, Option<String>, Option<String>, Option<i64>)> = self
+                let last: Option<(i64, String, Option<String>, Option<String>, Option<i64>, Option<i64>)> = self
                     .conn()
                     .query_row(
-                        "SELECT we.id, w.started_at_local, we.notes, we.next_intent, we.rep_max FROM workout_exercise we
+                        "SELECT we.id, w.started_at_local, we.notes, we.next_intent, we.rep_min, we.rep_max FROM workout_exercise we
                          JOIN workout w ON w.id = we.workout_id
                          WHERE we.exercise_id = ?1 AND w.finished = 1 AND w.id != ?2 AND w.started_at_local <= ?3
                          ORDER BY w.started_at_local DESC LIMIT 1",
                         params![ex, workout_id, started],
-                        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+                        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
                     )
                     .optional()?;
-                if let Some((last_we, at, notes, intent, last_rep_max)) = last {
+                if let Some((last_we, at, notes, intent, last_rep_min, last_rep_max)) = last {
+                    // Rep range from this workout, else from last time.
+                    let (lo, hi): (Option<i64>, Option<i64>) =
+                        self.conn().query_row("SELECT rep_min, rep_max FROM workout_exercise WHERE id = ?1", [we], |r| Ok((r.get(0)?, r.get(1)?)))?;
+                    let target = if hi.is_some() { (lo, hi) } else { (last_rep_min, last_rep_max) };
+                    prev.progression = progression_hint(&self.recent_tops(ex, workout_id, &started)?, target, intent.as_deref());
                     let mut ss = self.conn().prepare_cached(
                         "SELECT set_type, weight_kg, reps, distance_m, duration_s FROM workout_set WHERE workout_exercise_id = ?1 ORDER BY position",
                     )?;
@@ -530,17 +619,59 @@ impl Db {
                     prev.at = Some(at);
                     prev.notes = notes;
                     prev.next_intent = intent;
-                    // Target from this workout, else from last time.
-                    let target_max: Option<i64> =
-                        self.conn().query_row("SELECT rep_max FROM workout_exercise WHERE id = ?1", [we], |r| r.get(0))?;
-                    if let Some(top) = target_max.or(last_rep_max) {
-                        let working: Vec<_> = prev.sets.iter().filter(|s| s.set_type == "normal" || s.set_type == "failure").collect();
-                        prev.suggest_increase = !working.is_empty() && working.iter().all(|s| s.reps.unwrap_or(0) >= top);
-                    }
                 }
             }
             out.push(prev);
         }
         Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod progression_tests {
+    use super::*;
+    fn s(w: f64, reps: &[i64]) -> SessionTop {
+        SessionTop { weight_kg: w, reps: reps.to_vec() }
+    }
+    fn kind(p: Option<Progression>) -> Option<String> {
+        p.map(|p| p.kind)
+    }
+
+    #[test]
+    fn top_of_range_means_add_weight() {
+        assert_eq!(kind(progression_hint(&[s(100.0, &[8, 8, 8])], (Some(6), Some(8)), None)), Some("increase".into()));
+        assert_eq!(kind(progression_hint(&[s(100.0, &[8, 7, 8])], (Some(6), Some(8)), None)), None);
+    }
+
+    #[test]
+    fn without_a_range_repeating_a_weight_cleanly_means_add_weight() {
+        let ok = [s(100.0, &[10, 10, 10]), s(100.0, &[10, 10, 9])];
+        assert_eq!(kind(progression_hint(&ok, (None, None), None)), Some("increase".into()));
+        let worse = [s(100.0, &[10, 9, 8]), s(100.0, &[10, 10, 9])];
+        assert_eq!(kind(progression_hint(&worse, (None, None), None)), None);
+    }
+
+    #[test]
+    fn three_misses_mean_deload() {
+        let below = [s(100.0, &[5, 4]), s(100.0, &[5, 5]), s(100.0, &[4, 4])];
+        assert_eq!(kind(progression_hint(&below, (Some(6), Some(8)), None)), Some("deload".into()));
+        // No range: fewer reps than the session before, three times at the same weight.
+        let sliding = [s(100.0, &[6, 5]), s(100.0, &[6, 6]), s(100.0, &[7, 6]), s(100.0, &[7, 7])];
+        assert_eq!(kind(progression_hint(&sliding, (None, None), None)), Some("deload".into()));
+        // Already dropped the weight: no second deload.
+        let lighter = [s(90.0, &[5, 4]), s(100.0, &[5, 5]), s(100.0, &[4, 4])];
+        assert_eq!(kind(progression_hint(&lighter, (Some(6), Some(8)), None)), None);
+    }
+
+    #[test]
+    fn your_rating_comes_first() {
+        let top = [s(100.0, &[8, 8, 8])];
+        assert_eq!(kind(progression_hint(&top, (Some(6), Some(8)), Some("hold"))), None);
+        assert_eq!(kind(progression_hint(&top, (Some(6), Some(8)), Some("down"))), Some("decrease".into()));
+        let mid = [s(100.0, &[7, 6])];
+        assert_eq!(kind(progression_hint(&mid, (Some(6), Some(8)), Some("up"))), Some("increase".into()));
+        // Hold still deloads after three misses.
+        let below = [s(100.0, &[5, 4]), s(100.0, &[5, 5]), s(100.0, &[4, 4])];
+        assert_eq!(kind(progression_hint(&below, (Some(6), Some(8)), Some("hold"))), Some("deload".into()));
     }
 }

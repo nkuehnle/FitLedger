@@ -54,7 +54,9 @@ the media stream (media volume, ducking music) at 0, with the screen off or in a
 started while the app is in front, because Android mutes audio from a service started in the
 background; an exact alarm 3 s before the end restarts it if it was killed.
 
-Exports and backups on Android save to `Download/Liftbook` (or open the share sheet).
+Exports and backups on Android save to `Download/Liftbook` (or open the share sheet). A weekly
+automatic backup (`liftbook-auto-<date>.liftbook`, newest 4 kept) goes to the same folder, or to
+`auto-backups/` in the app data folder on desktop; it can be turned off on the Data page.
 
 ### Loading data without the UI
 

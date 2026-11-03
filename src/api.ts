@@ -346,7 +346,8 @@ export interface Previous {
   sets: PrevSet[];
   notes: string | null;
   next_intent: "up" | "hold" | "down" | null;
-  suggest_increase: boolean;
+  /** "Add weight if you can, deload if you keep missing", with your last ↑/=/↓ rating first. */
+  progression: { kind: "increase" | "decrease" | "deload"; weight_kg: number; reason: string } | null;
   setup_note: string | null;
   primary: string[];
   secondary: string[];
@@ -566,6 +567,8 @@ export const api = {
   setSetting: (key: string, value: string) => invoke<void>("set_setting", { key, value }),
   /** Android only (no-op elsewhere): weigh-in reminder on weekdays 0 = Sunday … 6 = Saturday. */
   weighInReminder: (days: number[], hour: number, minute: number) => invoke<void>("weigh_in_reminder", { days, hour, minute }),
+  /** Weekly backup to Download/Liftbook (Android) if due, or now with `force`; returns where it went. */
+  autoBackup: (force: boolean) => invoke<string | null>("auto_backup", { force }),
 
   perHandSuspects: () => invoke<PerHandSuspect[]>("per_hand_suspects"),
   setSessionLoadMode: (workoutExerciseId: number, mode: "total" | "per_hand" | null) =>

@@ -259,8 +259,12 @@ function ExportBackup() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<{ path: string; backup: BackupInfo; local: BackupInfo } | null>(null);
   const [shareExports, setShareExports] = useState(false);
+  const [auto, setAuto] = useState<{ on: boolean; last: string | null } | null>(null);
   useEffect(() => {
     api.getSetting("last_backup_at").then(setLast);
+    Promise.all([api.getSetting("auto_backup"), api.getSetting("last_auto_backup_at")]).then(([on, last]) =>
+      setAuto({ on: on !== "off", last }),
+    );
   }, []);
   const run = async (f: () => Promise<string | null>) => {
     setError(null);
@@ -370,6 +374,26 @@ function ExportBackup() {
             </button>
           )}
         </div>
+        {auto && (
+          <>
+            <label className="check small">
+              <input
+                type="checkbox"
+                checked={auto.on}
+                onChange={(e) => {
+                  setAuto({ ...auto, on: e.target.checked });
+                  api.setSetting("auto_backup", e.target.checked ? "on" : "off");
+                }}
+              />
+              Back up automatically every week to {IS_ANDROID ? "Download/Liftbook" : "the app's auto-backups folder"} (keeps the last 4)
+            </label>
+            {auto.on && (
+              <p className="muted small">
+                {auto.last ? `Last automatic backup: ${formatDate(auto.last)}.` : "The first one runs the next time the app starts."}
+              </p>
+            )}
+          </>
+        )}
         {pending && (
           <div className="restore-confirm">
             <table className="sets small">

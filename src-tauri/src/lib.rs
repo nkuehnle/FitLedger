@@ -813,6 +813,56 @@ fn stage_backup(app: tauri::AppHandle, data: String) -> CmdResult<StagedBackup> 
     Ok(StagedBackup { path: path.to_string_lossy().into_owned(), info })
 }
 
+// ---- Automatic backups ------------------------------------------------------------------------------
+//
+// Once a week (checked when the app starts) a full backup goes to Download/Liftbook on Android, or
+// the app data folder's auto-backups/ elsewhere; only the newest AUTO_KEEP are kept.
+
+const AUTO_EVERY_DAYS: i64 = 7;
+const AUTO_KEEP: usize = 4;
+
+/// Makes the weekly backup if one is due (or `force`); returns where it went, if it ran.
+#[tauri::command]
+fn auto_backup(app: tauri::AppHandle, state: State<AppState>, force: bool) -> CmdResult<Option<String>> {
+    let (enabled, last, workouts) = with(&state, |db| {
+        Ok((db.setting("auto_backup")?.as_deref() != Some("off"), db.setting("last_auto_backup_at")?, db.counts()?.workouts))
+    })?;
+    let due = last
+        .and_then(|l| chrono::NaiveDateTime::parse_from_str(&l, "%Y-%m-%d %H:%M:%S").ok())
+        .is_none_or(|l| (Local::now().naive_local() - l).num_days() >= AUTO_EVERY_DAYS);
+    if !force && (!enabled || !due || workouts == 0) {
+        return Ok(None);
+    }
+    let name = format!("liftbook-auto-{}.liftbook", today_stamp());
+    #[cfg(target_os = "android")]
+    let place = {
+        let path = share_dir(&app)?.join(&name);
+        with(&state, |db| db.backup_to(&path))?;
+        native_call(&app, "saveDownload", serde_json::json!({ "path": path.to_string_lossy(), "mime": "application/octet-stream", "title": "" }))?;
+        native_call(&app, "pruneDownloads", serde_json::json!({ "prefix": "liftbook-auto-", "keep": AUTO_KEEP }))?;
+        format!("Download/Liftbook/{name}")
+    };
+    #[cfg(not(target_os = "android"))]
+    let place = {
+        let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("auto-backups");
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let path = dir.join(&name);
+        with(&state, |db| db.backup_to(&path))?;
+        let mut old: Vec<_> = std::fs::read_dir(&dir)
+            .map_err(|e| e.to_string())?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("liftbook-auto-")))
+            .collect();
+        old.sort();
+        for p in old.iter().rev().skip(AUTO_KEEP) {
+            let _ = std::fs::remove_file(p);
+        }
+        path.to_string_lossy().into_owned()
+    };
+    with(&state, |db| db.set_setting("last_auto_backup_at", &Local::now().naive_local().format("%Y-%m-%d %H:%M:%S").to_string()))?;
+    Ok(Some(place))
+}
+
 #[tauri::command]
 fn backup_to(state: State<AppState>, path: String) -> CmdResult<BackupInfo> {
     with(&state, |db| {
@@ -1063,7 +1113,7 @@ pub fn run() {
             preview_inbody_csv, import_inbody_csv, diet_days, save_diet_day, energy_balance,
             body_parts, measurements, add_measurement, delete_measurement,
             export_file, backup_to, inspect_backup, restore_from, db_info, save_base64, copy_png,
-            rest_android_status, rest_android_rest, rest_android_clear, weigh_in_reminder,
+            rest_android_status, rest_android_rest, rest_android_clear, weigh_in_reminder, auto_backup,
             share_export, share_backup, share_png, save_png_to_photos, read_inbody_image, stage_backup,
             counts, get_setting, set_setting,
         ])

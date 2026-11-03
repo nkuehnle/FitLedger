@@ -5,7 +5,7 @@ import { navigate, usePrefs } from "../App";
 import { ExercisePicker } from "../components/ExercisePicker";
 import { Modal } from "../components/Modal";
 import { RestTimer, useRestTimer } from "../components/RestTimer";
-import { EQUIPMENT_LABELS, formatClock, formatWeight, parseLocal, setLabel } from "../format";
+import { EQUIPMENT_LABELS, formatClock, formatWeight, parseLocal, setLabel, toUnit } from "../format";
 
 const KG_PER_LB = 0.45359237;
 
@@ -278,6 +278,30 @@ function groupSupersets(exercises: ExerciseView[]) {
   return out;
 }
 
+/** Plate step for suggestions: 5 lb / 2.5 kg, half that for light weights. */
+function suggestedWeight(p: NonNullable<Previous["progression"]>, unit: "kg" | "lb"): number {
+  const w = toUnit(p.weight_kg, unit);
+  const step = unit === "lb" ? (w >= 50 ? 5 : 2.5) : w >= 20 ? 2.5 : 1.25;
+  const target = p.kind === "increase" ? w + step : p.kind === "decrease" ? w - step : w * 0.9;
+  const rounded = Math.max(step, Math.round(target / step) * step);
+  return unit === "lb" ? rounded * KG_PER_LB : rounded;
+}
+
+/** One line at the top of an exercise: what to do this time, and why. */
+function ProgressionNote({ p, unit, onUse }: { p: NonNullable<Previous["progression"]>; unit: "kg" | "lb"; onUse: (kg: number) => void }) {
+  const kg = suggestedWeight(p, unit);
+  const arrow = p.kind === "increase" ? "↑" : "↓";
+  return (
+    <div className="hint">
+      {arrow} {formatWeight(kg, unit)} {unit}
+      {p.kind === "deload" ? " (deload)" : ""} · {p.reason}{" "}
+      <button className="link-btn" onClick={() => onUse(kg)}>
+        Use
+      </button>
+    </div>
+  );
+}
+
 const REST_CHOICES = [0, 15, 30, 45, 60, 75, 90, 105, 120, 150, 180, 240, 300];
 
 function RestSelect({ value, onChange }: { value: number; onChange: (s: number) => void }) {
@@ -362,6 +386,8 @@ function ExerciseBlock({
       .then(onChanged)
       .catch((x) => onError(String(x)));
   const update = (u: Parameters<typeof api.updateWorkoutExercise>[1]) => run(() => api.updateWorkoutExercise(e.id, u));
+  /** Puts a suggested weight into every set not ticked yet. */
+  const applyWeight = (kg: number) => run(() => Promise.all(e.sets.filter((x) => !x.completed).map((x) => api.updateSet(x.id, { weight_kg: kg }))));
   const perHand = e.load_mode === "per_hand";
   const kind = e.kind ?? "weight_reps";
   const reps = e.rep_min && e.rep_max && e.rep_min !== e.rep_max ? `${e.rep_min}–${e.rep_max}` : (e.rep_max ?? e.rep_min);
@@ -438,11 +464,12 @@ function ExerciseBlock({
           </button>
         )
       )}
-      {prev && (prev.suggest_increase || prev.next_intent || prev.notes) && (
+      {prev && (prev.progression || prev.next_intent === "hold" || prev.notes) && (
         <div className="last-time small">
-          {prev.suggest_increase && <div className="hint">↑ Every set hit the top of the range last time. Try more weight.</div>}
-          {prev.next_intent && (
-            <div>Last time you planned to {{ up: "go up ↑", hold: "hold =", down: "go down ↓" }[prev.next_intent]}.</div>
+          {prev.progression ? (
+            <ProgressionNote p={prev.progression} unit={unit} onUse={(kg) => applyWeight(kg)} />
+          ) : (
+            prev.next_intent === "hold" && <div className="hint">= Stay at this weight · you rated it =</div>
           )}
           {prev.notes && <div className="muted">“{prev.notes}”</div>}
         </div>

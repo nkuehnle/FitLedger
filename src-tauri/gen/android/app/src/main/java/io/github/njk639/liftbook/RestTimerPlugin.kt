@@ -204,6 +204,12 @@ class ReminderArgs {
 }
 
 @InvokeArg
+class PruneArgs {
+    var prefix: String = ""
+    var keep: Int = 4
+}
+
+@InvokeArg
 class DateArgs {
     var date: String = ""
 }
@@ -276,6 +282,37 @@ class RestTimerPlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun saveDownload(invoke: Invoke) {
         saveTo(invoke, android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, "Download/Liftbook", "Saving to Downloads")
+    }
+
+    /** Keeps only the newest `keep` files in Downloads/Liftbook whose names start with `prefix`
+     *  (names carry the date, so newest sorts last). Files the app no longer owns are skipped. */
+    @Command
+    fun pruneDownloads(invoke: Invoke) {
+        val a = invoke.parseArgs(PruneArgs::class.java)
+        if (Build.VERSION.SDK_INT < 29) {
+            invoke.resolve()
+            return
+        }
+        val collection = android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI
+        val resolver = activity.contentResolver
+        val found = mutableListOf<Pair<Long, String>>()
+        resolver.query(
+            collection,
+            arrayOf(android.provider.MediaStore.MediaColumns._ID, android.provider.MediaStore.MediaColumns.DISPLAY_NAME),
+            "${android.provider.MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? AND ${android.provider.MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?",
+            arrayOf("Download/Liftbook%", "${a.prefix}%"),
+            null,
+        )?.use { c ->
+            while (c.moveToNext()) found.add(c.getLong(0) to c.getString(1))
+        }
+        found.sortedByDescending { it.second }.drop(a.keep).forEach { (id, _) ->
+            try {
+                resolver.delete(android.content.ContentUris.withAppendedId(collection, id), null, null)
+            } catch (e: SecurityException) {
+                // Saved by an earlier install of the app: Android won't let us delete it.
+            }
+        }
+        invoke.resolve()
     }
 
     private fun saveTo(invoke: Invoke, collection: android.net.Uri, folder: String, what: String) {
