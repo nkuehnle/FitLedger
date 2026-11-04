@@ -4,7 +4,7 @@ import { api, type ExerciseStats, type InBodyScan, type Muscle, type WeighInRow,
 import { usePrefs } from "../App";
 import { BodyMap, useHeatScale } from "../charts/BodyMap";
 import { inRange, today, type Range } from "../charts/RangePicker";
-import { TimeSeriesSvg } from "../charts/TimeSeriesChart";
+import { TimeSeriesSvg, type TimeSeriesProps } from "../charts/TimeSeriesChart";
 import { DARK, LIGHT, type ChartTheme } from "../charts/theme";
 import { Modal } from "../components/Modal";
 import { formatDate, formatDuration, formatVolume, formatWeight, parseLocal, toUnit } from "../format";
@@ -17,7 +17,9 @@ export type ShareKind =
   | { kind: "bodymap"; range: Range }
   | { kind: "bodyweight"; range: Range }
   | { kind: "inbody" }
-  | { kind: "count" };
+  | { kind: "count" }
+  /** Any time-series chart, as it's shown (series, smoothing, phases). */
+  | { kind: "chart"; title: string; chart: TimeSeriesProps & { smooth: { on: boolean; span: number } } };
 
 export function ShareButton(props: ShareKind) {
   const [open, setOpen] = useState(false);
@@ -310,6 +312,21 @@ async function buildContent(spec: ShareKind, unit: "kg" | "lb"): Promise<CardCon
   const muscles = (await api.muscles()).muscles;
   const names = Object.fromEntries(muscles.map((m: Muscle) => [m.id, m.name]));
   switch (spec.kind) {
+    case "chart": {
+      const all = spec.chart.series.flatMap((s) => s.points.map((p) => p.t.getTime()));
+      const day = (ms: number) => new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+      const lo = all.reduce((a, b) => Math.min(a, b), Infinity);
+      const hi = all.reduce((a, b) => Math.max(a, b), -Infinity);
+      return {
+        title: spec.title,
+        subtitle: all.length ? `${day(lo)} – ${day(hi)}` : "",
+        stats: [],
+        lines: [],
+        visual: (theme, width, h, hide) => (
+          <TimeSeriesSvg {...spec.chart} theme={theme} width={width} height={h} hideNumbers={hide} fontScale={2} />
+        ),
+      };
+    }
     case "workout": {
       const d = (await api.workoutDetail(spec.workoutId)) as WorkoutDetail;
       const values = Object.fromEntries(d.muscle_sets);

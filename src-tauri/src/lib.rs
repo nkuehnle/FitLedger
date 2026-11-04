@@ -762,11 +762,16 @@ struct InBodyImageRead {
 }
 
 /// Reads an InBody 580 result sheet image (base64) with on-device OCR. Takes a few seconds, so
-/// it runs off the main thread. Masses (and water, printed in the same unit) are converted to kg / L.
+/// it runs off the main thread. The first read downloads the OCR models (12 MB) into app data.
+/// Masses (and water, printed in the same unit) are converted to kg / L.
 #[tauri::command]
-async fn read_inbody_image(data: String, mass_unit: Option<String>) -> CmdResult<InBodyImageRead> {
+async fn read_inbody_image(app: tauri::AppHandle, data: String, mass_unit: Option<String>) -> CmdResult<InBodyImageRead> {
     let bytes = base64::engine::general_purpose::STANDARD.decode(data).map_err(|e| e.to_string())?;
-    let r = tauri::async_runtime::spawn_blocking(move || fitledger_ocr::read_inbody580(&bytes))
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("ocr-models");
+    let r = tauri::async_runtime::spawn_blocking(move || {
+        fitledger_ocr::ensure_models(&dir)?;
+        fitledger_ocr::read_inbody580(&bytes, &dir)
+    })
         .await
         .map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())?;

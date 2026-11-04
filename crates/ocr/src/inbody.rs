@@ -80,7 +80,8 @@ fn decimals(field: &str) -> u32 {
     }
 }
 
-pub fn read_inbody580(image_bytes: &[u8]) -> Result<InBodyRead, Error> {
+/// Reads a sheet with the models in `model_dir` (see `ensure_models`).
+pub fn read_inbody580(image_bytes: &[u8], model_dir: &std::path::Path) -> Result<InBodyRead, Error> {
     let img = image::load_from_memory(image_bytes).map_err(|e| Error(format!("couldn't read the image: {e}")))?.into_rgb8();
     let img = &img;
     let (width, height) = img.dimensions();
@@ -88,7 +89,7 @@ pub fn read_inbody580(image_bytes: &[u8]) -> Result<InBodyRead, Error> {
     if (aspect - W / H).abs() > 0.03 {
         return Err(Error("this doesn't look like a full InBody 580 result sheet (unexpected page shape)".into()));
     }
-    let (detection, recognition) = models()?;
+    let (detection, recognition) = models(model_dir)?;
     let engine = OcrEngine::new(OcrEngineParams {
         detection_model: Some(detection),
         recognition_model: Some(recognition),

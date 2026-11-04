@@ -406,6 +406,7 @@ function BodyweightTab() {
           height={280}
           hideNumbers={hide}
           yFormat={(v) => v.toFixed(0)}
+          share={false}
         />
       </section>
       <WeighInList rows={rows} unit={unit} onChanged={load} />

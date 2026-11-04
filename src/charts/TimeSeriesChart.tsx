@@ -1,6 +1,7 @@
 import * as d3 from "d3";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { ShareButton } from "../share/ShareDialog";
 import { loess } from "./loess";
 import { useChartTheme, type ChartTheme } from "./theme";
 
@@ -56,12 +57,36 @@ export interface TimeSeriesProps {
   /** Gridline spacing in data units (e.g. 250 kcal); gridlines are dashed and labels thinned to fit. */
   yStep?: number;
   fontScale?: number;
+  /** Card title when the chart is shared as an image (defaults to the first series' label). */
+  title?: string;
+  /** Show a Share button (off where the card already shares this chart). */
+  share?: boolean;
+  /** Touch drags move the readout instead of scrolling (full screen). */
+  scrub?: boolean;
+}
+
+/** Raw vs Trend is remembered across charts and restarts. */
+const SMOOTH_KEY = "fitledger.chart.trend";
+function storedTrend(): boolean {
+  try {
+    return localStorage.getItem(SMOOTH_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 const DAY = 86_400_000;
 
 export function TimeSeriesChart(props: TimeSeriesProps) {
-  const [smoothOn, setSmoothOn] = useState(false);
+  const [smoothOn, setSmoothOnState] = useState(storedTrend);
+  const setSmoothOn = (on: boolean) => {
+    setSmoothOnState(on);
+    try {
+      localStorage.setItem(SMOOTH_KEY, on ? "1" : "0");
+    } catch {
+      // Storage unavailable: the choice lasts until the chart closes.
+    }
+  };
   const [span, setSpan] = useState(0.3);
   const [showBands, setShowBands] = useState(true);
   const [full, setFull] = useState(false);
@@ -94,6 +119,13 @@ export function TimeSeriesChart(props: TimeSeriesProps) {
           Phases
         </label>
       )}
+      {hasData && props.share !== false && (
+        <ShareButton
+          kind="chart"
+          title={props.title ?? props.series[0]?.label ?? "Chart"}
+          chart={{ ...props, smooth, bands: showBands ? props.bands : undefined }}
+        />
+      )}
       {hasData && !inFull && (
         <button className="icon-btn chart-expand" title="Full screen" aria-label="Full screen" onClick={() => setFull(true)}>
           <svg
@@ -115,7 +147,13 @@ export function TimeSeriesChart(props: TimeSeriesProps) {
   const body = (height?: number) => (
     <>
       {props.series.length > 1 && <Legend series={props.series} theme={props.theme} />}
-      <TimeSeriesSvg {...props} height={height ?? props.height} smooth={smooth} bands={showBands ? props.bands : undefined} />
+      <TimeSeriesSvg
+        {...props}
+        height={height ?? props.height}
+        smooth={smooth}
+        bands={showBands ? props.bands : undefined}
+        scrub={height !== undefined}
+      />
     </>
   );
 
@@ -327,7 +365,7 @@ export function TimeSeriesSvg(props: TimeSeriesProps & { smooth: { on: boolean; 
         width={width}
         height={height}
         viewBox={`0 0 ${width} ${height}`}
-        style={{ display: "block", width: props.width ? width : "100%", height: "auto", touchAction: "pan-y" }}
+        style={{ display: "block", width: props.width ? width : "100%", height: "auto", touchAction: props.scrub ? "none" : "pan-y" }}
         onPointerMove={onMove}
         onPointerLeave={() => setHover(null)}
         fontFamily="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
@@ -460,17 +498,17 @@ export function TimeSeriesSvg(props: TimeSeriesProps & { smooth: { on: boolean; 
               </g>
             );
           }
-          // Hollow markers on a subset so dense lines stay readable.
-          const every = Math.max(1, Math.ceil(pts.length / Math.max(8, width / 28)));
+          // A marker on every point: hollow when there's room, small solid dots when dense.
+          const gap = (width - margin.left - margin.right) / Math.max(1, pts.length - 1);
+          const r = Math.max(1.75, Math.min(4, gap / 2.5)) * fs;
+          const hollow = r >= 3 * fs;
           return (
             <g key={s.id}>
               {shade(s.points.map((p) => p.v))}
-              <path d={line(pts)!} fill="none" stroke={color} strokeWidth={2 * fs} strokeLinejoin="round" strokeLinecap="round" />
-              {pts
-                .filter((_, i) => i % every === 0 || i === pts.length - 1)
-                .map(([px, py], i) => (
-                  <circle key={i} cx={px} cy={py} r={4 * fs} fill={theme.surface} stroke={color} strokeWidth={2 * fs} />
-                ))}
+              <path d={line(pts)!} fill="none" stroke={color} strokeWidth={(hollow ? 2 : 1.25) * fs} strokeLinejoin="round" strokeLinecap="round" />
+              {pts.map(([px, py], i) => (
+                <circle key={i} cx={px} cy={py} r={r} fill={hollow ? theme.surface : color} stroke={hollow ? color : "none"} strokeWidth={2 * fs} />
+              ))}
             </g>
           );
         })}
