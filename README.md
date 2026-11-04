@@ -91,9 +91,11 @@ from **Settings → Import, export & backup → Restore…**.
 
 ### Watches and health apps
 
-- **Health Connect** sync on Android (Garmin Connect, Fitbit, Oura, … write to it): weight,
-  workouts, heart rate, sleep, resting heart rate, HRV and steps.
-- **Garmin .fit file import** on any platform.
+- **Health Connect** sync on Android: FitLedger reads what your watch or ring app shares with
+  Android's Health Connect (Garmin Connect, Fitbit, Oura and others can). That covers weight,
+  workouts, heart rate, sleep, resting heart rate, HRV and steps, as far as each app shares them.
+  There are no direct connections to Garmin, Fitbit or Oura accounts.
+- **Garmin .fit file import** on any platform (single activities or a full account export).
 - Heart rate on the workout screen and a recovery line on Today.
 
 ### Your data
