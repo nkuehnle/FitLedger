@@ -41,6 +41,7 @@ from **Settings → Import, export & backup → Restore…**.
 ## Features
 
 ### Workouts
+
 - **Strong-style live workout:** every set comes pre-filled from your last session of that
   workout. Tick sets in any order, swap or reorder exercises, and add workout or exercise notes.
 - **Supersets** are shown with a colored bar and can be dragged as a unit.
@@ -56,6 +57,7 @@ from **Settings → Import, export & backup → Restore…**.
   calories, a stopwatch, and cardio PRs.
 
 ### Progress
+
 - **Per-exercise charts:** estimated 1RM, heaviest weight, volume and reps, with PR markers,
   rep maxes and PR history.
 - **Body map heat map** of the muscles you trained, colored against weekly set targets, plus a
@@ -64,6 +66,7 @@ from **Settings → Import, export & backup → Restore…**.
 - **Program phases** (e.g. "Upper / Lower", "Cut") drawn as bands behind every chart.
 
 ### Body
+
 - **Bodyweight** with a 7-day average, change per week, a goal (cut, maintain or gain) with a
   weekly target, and weigh-in reminders on the days you choose.
 - **Body parts:** log any measurement (waist, neck, arms, …) and chart it.
@@ -74,10 +77,12 @@ from **Settings → Import, export & backup → Restore…**.
   TDEE estimate.
 
 ### Charts
+
 - **Raw or Trend** (LOESS smoothing). Your choice is remembered. Raw shows every data point.
 - **Full screen,** turned sideways on a phone. Drag along the line to read the date and value.
 
 ### Sharing
+
 - **Share any chart, workout, exercise or body map as an image:** square (1080×1080) or story
   (1080×1920), dark or light, with an option to hide exact numbers.
 - **Save to Photos** or use the Android share sheet (Instagram Stories, Discord, Messages, …).
@@ -85,12 +90,14 @@ from **Settings → Import, export & backup → Restore…**.
 <img src="docs/screenshots/share-card.png" width="320" alt="A workout shared as an image card">
 
 ### Watches and health apps
+
 - **Health Connect** sync on Android (Garmin Connect, Fitbit, Oura, … write to it): weight,
   workouts, heart rate, sleep, resting heart rate, HRV and steps.
 - **Garmin .fit file import** on any platform.
 - Heart rate on the workout screen and a recovery line on Today.
 
 ### Your data
+
 - **Offline first.** The only network use is a one-time 12 MB download of the InBody sheet reader
   the first time you read a sheet.
 - **Backups:** manual backups, a weekly automatic backup to `Download/FitLedger` (newest 4 kept),
