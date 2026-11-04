@@ -42,7 +42,7 @@ are a setting.
 - **Programs.** Built-in generic starter programs (editable) plus user-made templates and routines.
 - **Weeks** start on Monday.
 - **Charts.** Shared time-series style: right-side y-axis with units, sparse year/month x labels,
-  faint grid (solid at years, dashed at months), a single 2px line with sparse hollow markers, no
+  faint grid (solid at years, dashed at months), a single 2px line with a marker on every point, no
   chrome for single series. Raw / LOESS toggle (LOESS line with faint raw points). Own palette,
   designed separately for light and dark.
 - **Diet (optional).** Daily calorie and protein totals, each optional. Adaptive TDEE from sliding-window intake averages and

@@ -3,7 +3,7 @@ name = "fitledger-ocr"
 version = "0.1.2"
 edition = "2021"
 description = "Offline OCR of InBody result sheets (ocrs)"
-license = "MIT"
+license = "PolyForm-Noncommercial-1.0.0"
 
 [dependencies]
 ocrs = { version = "0.13.1", features = ["rten"] }

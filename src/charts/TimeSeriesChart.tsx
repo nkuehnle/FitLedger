@@ -121,6 +121,7 @@ export function TimeSeriesChart(props: TimeSeriesProps) {
       )}
       {hasData && props.share !== false && (
         <ShareButton
+          icon
           kind="chart"
           title={props.title ?? props.series[0]?.label ?? "Chart"}
           chart={{ ...props, smooth, bands: showBands ? props.bands : undefined }}

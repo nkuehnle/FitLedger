@@ -3,7 +3,7 @@ name = "fitledger-core"
 version = "0.1.0"
 edition = "2024"
 description = "FitLedger domain logic: importers, stats, schedule, storage"
-license = "MIT"
+license = "PolyForm-Noncommercial-1.0.0"
 
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }

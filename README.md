@@ -1,111 +1,110 @@
 # FitLedger
-The last fitness app I'll ever use.
 
-## Running
+The last fitness app I'll ever use. A personal tracker for lifting, cardio, bodyweight and body
+composition that runs on your phone (Android) and desktop (Linux, Windows). No account, no server,
+no subscription: your data stays on your device.
 
-### Desktop (Linux/Windows)
+<p>
+  <img src="docs/screenshots/workouts.png" width="270" alt="Workouts: today's suggestion and recent workouts">
+  <img src="docs/screenshots/live-workout.png" width="270" alt="Live workout with pre-filled sets">
+  <img src="docs/screenshots/exercise-chart.png" width="270" alt="Exercise chart: estimated 1RM over two years with program phases">
+</p>
+<p>
+  <img src="docs/screenshots/body-map.png" width="270" alt="Body map of muscles trained">
+  <img src="docs/screenshots/bodyweight.png" width="270" alt="Bodyweight chart with goals, phases and InBody scans">
+  <img src="docs/screenshots/body-composition.png" width="270" alt="Body fat from InBody and tape estimates">
+</p>
 
-```sh
-pnpm install
-pnpm tauri dev          # development build with hot reload
-pnpm tauri build        # installable bundles in target/release/bundle/
-```
+<sub>Screenshots use made-up demo data (`cargo run -p fitledger-core --example demo_data`).</sub>
 
-On Linux this needs the WebKitGTK 4.1 development packages (see the
-[Tauri prerequisites](https://tauri.app/start/prerequisites/)).
+## Install
 
-### Android
+**Android:** download `fitledger-<version>.apk` from the latest
+[release](https://github.com/nkuehnle/FitLedger/releases), open it on your phone, and allow
+installing from your browser or Files app when Android asks. New versions install over the old one,
+and your data stays. (The APK is for 64-bit ARM phones, which is nearly every phone made since about
+2017.)
 
-This machine has everything installed under `~/Android` (JDK 21, SDK, NDK 28.2, an emulator
-called `fitledger`). Set the environment first:
+**Coming from Strong:** export your data in Strong (Settings → Export data), then import the CSV in
+FitLedger under **Settings → Import, export & backup**. Body measurements from Strong import too.
 
-```sh
-export JAVA_HOME=~/Android/jdk ANDROID_HOME=~/Android/Sdk NDK_HOME=~/Android/Sdk/ndk/28.2.13676358
-```
+**Coming from Liftbook:** FitLedger installs as a new app. Restore your latest `.liftbook` backup
+from **Settings → Import, export & backup → Restore…**.
 
-From a VS Code terminal (VS Code is a snap), the snap's GTK and XDG variables break the build and
-the desktop app; use a normal terminal.
+**Desktop:** there are no desktop downloads yet; build it from source (see
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)).
 
-- **Emulator:** `~/Android/Sdk/emulator/emulator -avd fitledger &`, then `pnpm tauri android dev`.
-- **Your phone:** turn on Developer options (tap Build number 7 times) and USB debugging, plug it
-  in, accept the prompt, check `~/Android/Sdk/platform-tools/adb devices`, then
-  `pnpm tauri android dev` (or install the release APK below).
-- **Installable APK:** `pnpm tauri android build --apk --target aarch64` gives a signed
-  `src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk`.
-  Install it with `adb install -r <apk>`, or copy it to the phone and open it. Debug and release
-  builds have different signatures, so switching between them means uninstalling first (back up
-  your data from the app first).
+## Features
 
-Release signing uses `~/Android/fitledger-release.jks`; its passwords are in
-`~/Android/fitledger-keystore.properties` (copied to `src-tauri/gen/android/keystore.properties`,
-which git ignores). Keep both safe: app updates must be signed with the same key.
+### Workouts
+- **Strong-style live workout:** every set comes pre-filled from your last session of that
+  workout. Tick sets in any order, swap or reorder exercises, and add workout or exercise notes.
+- **Supersets** are shown with a colored bar and can be dragged as a unit.
+- **Rest timer** with a chime and countdown buzz that work with the screen off or in another app,
+  plus an ongoing notification with the rest countdown and the workout clock.
+- **Suggested weights** fill the empty boxes. Progression hints (go up, repeat, or deload after
+  repeated misses) and a next-time "up / hold / down" note for each exercise.
+- **Templates, routines and starter programs**, with a weekly or custom-length schedule. The
+  New workout list puts today's planned workout, or one you missed this week, first.
+- **Perform again:** repeat any past workout. When you finish, the app asks whether to update the
+  template.
+- **Cardio:** runs, rides and rows with live pace (or speed, or /500 m), average heart rate,
+  calories, a stopwatch, and cardio PRs.
 
-Backups on Android: the app keeps a consistent database snapshot in `backup/` (refreshed within a
-minute of any change) and Android's own Auto Backup copies it to the user's Google account,
-restoring it when the app is installed on a new phone. No sign-in or server is involved. Restore
-requires the same signing key, which is one more reason to keep the keystore safe. To test on an
-emulator: `adb shell bmgr transport com.android.localtransport/.LocalTransport`,
-`adb shell bmgr backupnow io.github.njk639.fitledger`, then uninstall and reinstall.
+### Progress
+- **Per-exercise charts:** estimated 1RM, heaviest weight, volume and reps, with PR markers,
+  rep maxes and PR history.
+- **Body map heat map** of the muscles you trained, colored against weekly set targets, plus a
+  muscle-by-week grid and a recovery view.
+- **Training calendar**, streaks, workout duration and weekly minutes of cardio.
+- **Program phases** (e.g. "Upper / Lower", "Cut") drawn as bands behind every chart.
 
-Rest timer on Android: `RestTimerPlugin.kt` in `src-tauri/gen/android/.../fitledger/` shows an
-ongoing notification (rest countdown / workout clock). During each rest `RestChimeService.kt`
-runs as a media-playback foreground service: it buzzes at 3, 2 and 1 s left and plays a chime on
-the media stream (media volume, ducking music) at 0, with the screen off or in another app. It is
-started while the app is in front, because Android mutes audio from a service started in the
-background; an exact alarm 3 s before the end restarts it if it was killed.
+### Body
+- **Bodyweight** with a 7-day average, change per week, a goal (cut, maintain or gain) with a
+  weekly target, and weigh-in reminders on the days you choose.
+- **Body parts:** log any measurement (waist, neck, arms, …) and chart it.
+- **Body composition:** InBody scans by hand, from a CSV, or **read straight from a photo of an
+  InBody 580 result sheet** with on-device OCR. Body fat, lean mass and fat mass are charted
+  alongside US Navy and relative-fat-mass tape estimates.
+- **Calories and protein (optional):** energy balance from your weight trend and an adaptive
+  TDEE estimate.
 
-Exports and backups on Android save to `Download/FitLedger` (or open the share sheet). A weekly
-automatic backup (`fitledger-auto-<date>.fitledger`, newest 4 kept) goes to the same folder, or to
-`auto-backups/` in the app data folder on desktop; it can be turned off on the Data page.
+### Charts
+- **Raw or Trend** (LOESS smoothing). Your choice is remembered. Raw shows every data point.
+- **Full screen,** turned sideways on a phone. Drag along the line to read the date and value.
 
-### Loading data without the UI
+### Sharing
+- **Share any chart, workout, exercise or body map as an image:** square (1080×1080) or story
+  (1080×1920), dark or light, with an option to hide exact numbers.
+- **Save to Photos** or use the Android share sheet (Instagram Stories, Discord, Messages, …).
 
-```sh
-cargo run -p fitledger-core --example import_strong -- <path/to/fitledger.db> strong_workouts.csv strong_weight.csv
-```
+<img src="docs/screenshots/share-card.png" width="320" alt="A workout shared as an image card">
 
-The app's database is `fitledger.db` in the platform app-data folder (Linux:
-`~/.local/share/io.github.njk639.fitledger/`).
+### Watches and health apps
+- **Health Connect** sync on Android (Garmin Connect, Fitbit, Oura, … write to it): weight,
+  workouts, heart rate, sleep, resting heart rate, HRV and steps.
+- **Garmin .fit file import** on any platform.
+- Heart rate on the workout screen and a recovery line on Today.
 
-### InBody result sheets
+### Your data
+- **Offline first.** The only network use is a one-time 12 MB download of the InBody sheet reader
+  the first time you read a sheet.
+- **Backups:** manual backups, a weekly automatic backup to `Download/FitLedger` (newest 4 kept),
+  and Android's own account backup, which restores your data on a new phone.
+- **Exports:** Strong-format workout CSV, bodyweight, InBody, measurements, diet, and a full JSON
+  export.
+- **kg or lb**, light or dark theme.
 
-Measure → Body comp → **Read sheet images** reads InBody 580 result sheets saved as PNG/JPEG,
-entirely on the device (`crates/ocr`, using the [Ocrs](https://github.com/robertknight/ocrs)
-engine with its models embedded). Each value is read from its known place on the sheet and the
-totals are cross-checked; anything doubtful opens in the scan form for a quick check. Ocrs models
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE.md): free to use, change and share for any non-commercial
+purpose (personal use, hobby projects, research, education, charities). Commercial use needs
+permission from the author.
+
+## Credits
+
+InBody sheet reading uses the [Ocrs](https://github.com/robertknight/ocrs) engine. Its models
 are trained on Google Research's HierText dataset and licensed CC BY-SA 4.0 (see
-`crates/ocr/models/README.md`).
+[crates/ocr/models/README.md](crates/ocr/models/README.md)).
 
-### Cardio
-
-Runs, rides and rows are distance + time exercises (`crates/core/src/cardio.rs`, `src/cardio.ts`).
-In a workout each segment shows its pace (or speed for cycling, /500 m for rowing) as you type,
-with optional average heart rate and calories, and a stopwatch fills in the time. Progress →
-Cardio shows weekly minutes against a goal (default 150), each activity's pace trend against your
-usual, and logs sessions done outside a workout. Cardio PRs: longest distance, longest time and
-fastest pace (sessions of at least 400 m).
-
-### Body fat estimates
-
-Measure → Body comp plots body fat from InBody scans, body fat logged in Strong, and two tape
-estimates: the US Navy method (waist and neck, plus hips for women, measured within two weeks)
-and relative fat mass (height and waist). At each estimate, weight at the nearest weigh-in gives
-lean mass (weight × (1 − body fat)), fat mass and skeletal muscle (lean × the muscle share of
-lean mass on your InBody scans, else 0.56), charted next to the InBody readings (`src/bodyfat.ts`).
-
-## Development
-
-```sh
-cargo test -p fitledger-core        # core tests (some use your real Strong export, see below)
-cargo test --release -p fitledger-ocr   # OCR tests (real sheets in ~/my_data/inbody, if present)
-pnpm test                          # frontend unit tests (LOESS)
-pnpm build                         # type-check and build the UI
-pnpm format                        # format the frontend
-python3 scripts/build_library.py   # rebuild data/library/exercises.json after editing curated.psv
-```
-
-Some tests (`crates/core/tests/real_data.rs`, kept out of this public repo via `.git/info/exclude`) run against a real Strong export. Put `strong_workouts_*.csv` and
-`strong_weight_*.csv` in `~/my_data` (or set `FITLEDGER_TEST_DATA`); those tests are skipped
-otherwise. Never commit personal exports.
-
-See [docs/PLAN.md](docs/PLAN.md) for architecture and milestones.
+For building, testing and releasing, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).

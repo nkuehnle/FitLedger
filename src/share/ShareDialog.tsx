@@ -21,13 +21,22 @@ export type ShareKind =
   /** Any time-series chart, as it's shown (series, smoothing, phases). */
   | { kind: "chart"; title: string; chart: TimeSeriesProps & { smooth: { on: boolean; span: number } } };
 
-export function ShareButton(props: ShareKind) {
+/** "Share" button; `icon` draws a compact share glyph instead (chart toolbars). */
+export function ShareButton(props: ShareKind & { icon?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button className="button small" onClick={() => setOpen(true)} aria-label="Share as image">
-        Share
-      </button>
+      {props.icon ? (
+        <button className="icon-btn chart-expand" title="Share as image" aria-label="Share as image" onClick={() => setOpen(true)}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />
+          </svg>
+        </button>
+      ) : (
+        <button className="button small" onClick={() => setOpen(true)} aria-label="Share as image">
+          Share
+        </button>
+      )}
       {open && <ShareDialog spec={props} onClose={() => setOpen(false)} />}
     </>
   );
