@@ -1031,6 +1031,19 @@ fn rest_timer_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
             {
                 let handle = _api.register_android_plugin("io.github.njk639.fitledger", "RestTimerPlugin")?;
                 _app.manage(RestTimer(handle));
+            }
+            Ok(())
+        })
+        .build()
+}
+
+/// Its own Tauri plugin: Android keys native plugins by the Tauri plugin's name, so registering
+/// two under "resttimer" made the second replace the first (share/save/rest calls then failed).
+fn health_connect_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    tauri::plugin::Builder::new("healthconnect")
+        .setup(|_app, _api| {
+            #[cfg(target_os = "android")]
+            {
                 let handle = _api.register_android_plugin("io.github.njk639.fitledger", "HealthConnectPlugin")?;
                 _app.manage(HealthConnect(handle));
             }
@@ -1203,6 +1216,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(rest_timer_plugin())
+        .plugin(health_connect_plugin())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;

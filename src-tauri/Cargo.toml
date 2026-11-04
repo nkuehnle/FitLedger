@@ -1,6 +1,6 @@
 [package]
 name = "fitledger"
-version = "1.0.0"
+version = "1.0.1"
 description = "Personal lift tracker"
 authors = ["njk639"]
 edition = "2024"
