@@ -171,6 +171,34 @@ export interface WorkoutDetail {
   notes: string | null;
   volume_kg: number;
   exercises: ExerciseView[];
+  /** From a watch, when one recorded the workout. */
+  avg_hr: number | null;
+  max_hr: number | null;
+}
+
+/** Recovery numbers for one day; sleep is the night that ended that morning. */
+export interface DayHealth {
+  date: string;
+  source: string;
+  sleep_s: number | null;
+  resting_hr: number | null;
+  hrv_ms: number | null;
+  steps: number | null;
+}
+
+/** What a watch / health app import added. */
+export interface WearableSummary {
+  weights: number;
+  activities: number;
+  workouts_hr: number;
+  days: number;
+}
+
+export interface HealthConnectStatus {
+  available: "yes" | "update" | "no";
+  granted: number;
+  total: number;
+  synced_at: string | null;
 }
 
 export interface Counts {
@@ -597,7 +625,15 @@ export const api = {
   weighInReminder: (days: number[], hour: number, minute: number) => invoke<void>("weigh_in_reminder", { days, hour, minute }),
   cardioSessions: () => invoke<CardioSession[]>("cardio_sessions"),
   logCardio: (entry: CardioEntry) => invoke<number>("log_cardio", { entry }),
-  /** Weekly backup to Download/Liftbook (Android) if due, or now with `force`; returns where it went. */
+  /** Android only: Health Connect (Garmin Connect, Fitbit, Oura, … write there). */
+  healthConnectStatus: () => invoke<HealthConnectStatus>("health_connect_status"),
+  healthConnectConnect: () => invoke<HealthConnectStatus>("health_connect_connect"),
+  healthConnectOpen: () => invoke<void>("health_connect_open"),
+  healthConnectSync: () => invoke<WearableSummary>("health_connect_sync"),
+  /** A Garmin .fit file or a .zip of them, base64. */
+  importFit: (data: string) => invoke<WearableSummary>("import_fit", { data }),
+  dayHealth: () => invoke<DayHealth[]>("day_health"),
+  /** Weekly backup to Download/FitLedger (Android) if due, or now with `force`; returns where it went. */
   autoBackup: (force: boolean) => invoke<string | null>("auto_backup", { force }),
 
   perHandSuspects: () => invoke<PerHandSuspect[]>("per_hand_suspects"),
@@ -709,7 +745,7 @@ export const api = {
   dbInfo: () => invoke<BackupInfo>("db_info"),
   saveBase64: (path: string, data: string) => invoke<void>("save_base64", { path, data }),
   copyPng: (data: string) => invoke<void>("copy_png", { data }),
-  /** Android: opens the share sheet, or with toDownloads saves to Downloads/Liftbook and returns where. */
+  /** Android: opens the share sheet, or with toDownloads saves to Downloads/FitLedger and returns where. */
   shareExport: (kind: "strong" | "bodyweight" | "inbody" | "diet" | "measurements" | "json", toDownloads: boolean) =>
     invoke<string | null>("share_export", { kind, toDownloads }),
   shareBackup: (toDownloads: boolean) => invoke<[BackupInfo, string | null]>("share_backup", { toDownloads }),

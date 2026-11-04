@@ -1,4 +1,4 @@
-# Liftbook curated exercise library.
+# FitLedger curated exercise library.
 # One exercise per line: name | equipment | pattern | kind | primary muscles | secondary muscles | aliases
 # Muscle ids come from muscles.json. Lists are comma-separated; aliases are separated by ";".
 # equipment: barbell dumbbell cable machine smith_machine landmine kettlebell band bodyweight cardio ez_bar trap_bar plate medicine_ball stability_ball other

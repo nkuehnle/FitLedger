@@ -1,7 +1,7 @@
-//! `cargo run --release -p liftbook-ocr --example dump -- sheet.png ...` prints what the reader sees.
+//! `cargo run --release -p fitledger-ocr --example dump -- sheet.png ...` prints what the reader sees.
 fn main() {
     for path in std::env::args().skip(1) {
-        let r = liftbook_ocr::read_inbody580(&std::fs::read(&path).unwrap()).unwrap();
+        let r = fitledger_ocr::read_inbody580(&std::fs::read(&path).unwrap()).unwrap();
         println!("{path}\t{}\t{}\t{}\t{:?}", r.measured_at.unwrap_or_default(), serde_json_like(&r.values), r.doubtful.join(","), r.mass_unit);
     }
 }

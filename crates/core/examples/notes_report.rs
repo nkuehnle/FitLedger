@@ -1,14 +1,14 @@
 //! Prints how the target parser reads each distinct exercise note in a Strong export.
-//! Usage: cargo run -p liftbook-core --example notes_report -- path/to/strong_workouts.csv
+//! Usage: cargo run -p fitledger-core --example notes_report -- path/to/strong_workouts.csv
 use std::collections::BTreeSet;
 
 fn main() {
     let path = std::env::args().nth(1).expect("path to a Strong workouts CSV");
     let text = std::fs::read_to_string(path).unwrap();
-    let imp = liftbook_core::strong::parse_workouts(&text, Default::default()).unwrap();
+    let imp = fitledger_core::strong::parse_workouts(&text, Default::default()).unwrap();
     let notes: BTreeSet<_> = imp.workouts.iter().flat_map(|w| &w.exercises).filter_map(|e| e.notes.clone()).collect();
     for n in notes {
-        let tag = match liftbook_core::targets::parse_target(&n) {
+        let tag = match fitledger_core::targets::parse_target(&n) {
             None => "  -  ".to_string(),
             Some(t) => format!(
                 "{} sets={:?} reps={:?} rest={:?}",

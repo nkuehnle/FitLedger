@@ -15,6 +15,7 @@ pub mod strong;
 pub mod targets;
 pub mod templates;
 pub mod units;
+pub mod wearables;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

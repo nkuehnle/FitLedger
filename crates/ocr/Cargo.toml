@@ -1,5 +1,5 @@
 [package]
-name = "liftbook-ocr"
+name = "fitledger-ocr"
 version = "0.1.2"
 edition = "2021"
 description = "Offline OCR of InBody result sheets (ocrs)"

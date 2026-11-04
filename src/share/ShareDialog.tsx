@@ -33,10 +33,12 @@ export function ShareButton(props: ShareKind) {
 
 const W = 1080;
 const PAD = 72;
-/** Cuts a line to fit the card at `size` px (≈0.55 em per character). */
-const fit = (text: string, size: number) => {
+/** Cuts a line to fit the card at `size` px (≈0.55 em per character). Counts whole characters, so
+ *  an emoji (two UTF-16 units) is never cut in half, which would make the SVG unencodable. */
+export const fit = (text: string, size: number) => {
   const max = Math.floor((W - PAD * 2) / (size * 0.55));
-  return text.length > max ? text.slice(0, max - 1) + "…" : text;
+  const chars = [...text];
+  return chars.length > max ? chars.slice(0, max - 1).join("") + "…" : text;
 };
 
 interface CardContent {
@@ -65,11 +67,13 @@ function ShareDialog({ spec, onClose }: { spec: ShareKind; onClose: () => void }
   const H = size === "square" ? 1080 : 1920;
 
   useEffect(() => {
-    buildContent(spec, unit).then((c) => {
-      setContent(c);
-      setTitle(c.title);
-      setSubtitle(c.subtitle);
-    });
+    buildContent(spec, unit)
+      .then((c) => {
+        setContent(c);
+        setTitle(c.title);
+        setSubtitle(c.subtitle);
+      })
+      .catch((e) => setMsg(`Couldn't load the card: ${e}`));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -87,14 +91,18 @@ function ShareDialog({ spec, onClose }: { spec: ShareKind; onClose: () => void }
     const t = setTimeout(async () => {
       const svgs = stage.current ? Array.from(stage.current.querySelectorAll("svg")) : [];
       const svg = composeSvg({ theme, H, title, subtitle, content, hide, visuals: svgs, top, visualW, visualH });
-      setPng(await rasterize(svg, W, H));
+      try {
+        setPng(await rasterize(svg, W, H));
+      } catch (e) {
+        setMsg(`Couldn't draw the image: ${e instanceof Event ? "the browser rejected the SVG" : e}`);
+      }
     }, 120);
     return () => clearTimeout(t);
   }, [content, style, size, hide, title, subtitle, theme, H, top, visualW, visualH]);
 
   async function saveFile() {
     if (!png) return;
-    const path = await save({ defaultPath: `liftbook-${slug(title)}-${today()}.png`, filters: [{ name: "PNG", extensions: ["png"] }] });
+    const path = await save({ defaultPath: `fitledger-${slug(title)}-${today()}.png`, filters: [{ name: "PNG", extensions: ["png"] }] });
     if (!path) return;
     await api.saveBase64(path, png.split(",")[1]);
     setMsg(`Saved ${path}`);
@@ -112,14 +120,14 @@ function ShareDialog({ spec, onClose }: { spec: ShareKind; onClose: () => void }
     if (!png) return;
     setMsg(null);
     await api
-      .savePngToPhotos(`liftbook-${slug(title)}-${today()}`, png.split(",")[1])
-      .then(() => setMsg("Saved to Photos (Pictures/Liftbook)."))
+      .savePngToPhotos(`fitledger-${slug(title)}-${today()}`, png.split(",")[1])
+      .then(() => setMsg("Saved to Photos (Pictures/FitLedger)."))
       .catch((e) => setMsg(String(e)));
   }
   async function shareSheet() {
     if (!png) return;
     if (IS_ANDROID) {
-      await api.sharePng(`liftbook-${slug(title)}`, png.split(",")[1]).catch((e) => setMsg(String(e)));
+      await api.sharePng(`fitledger-${slug(title)}`, png.split(",")[1]).catch((e) => setMsg(String(e)));
       return;
     }
     const file = new File([base64ToBytes(png.split(",")[1])], `${slug(title)}.png`, { type: "image/png" });
@@ -135,7 +143,7 @@ function ShareDialog({ spec, onClose }: { spec: ShareKind; onClose: () => void }
   return (
     <Modal title="Share as image" onClose={onClose} wide>
       <div className="share-layout">
-        <div className="share-preview">{png ? <img src={png} alt="Preview" /> : <div className="muted small">Rendering…</div>}</div>
+        <div className="share-preview">{png ? <img src={png} alt="Preview" /> : <div className="muted small">{msg ?? "Rendering…"}</div>}</div>
         <div className="share-options">
           <div className="row">
             {/* Android's WebView has no navigator.share; the native share sheet is always there. */}
@@ -203,7 +211,7 @@ function slug(s: string) {
     s
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || "liftbook"
+      .replace(/^-|-$/g, "") || "fitledger"
   );
 }
 
@@ -275,7 +283,7 @@ function composeSvg(o: {
     vy += h + 16;
   }
   parts.push(
-    `<text x="${W - PAD}" y="${H - PAD / 2}" font-size="26" fill="${theme.muted}" text-anchor="end" font-family="${font}">Liftbook</text>`,
+    `<text x="${W - PAD}" y="${H - PAD / 2}" font-size="26" fill="${theme.muted}" text-anchor="end" font-family="${font}">FitLedger</text>`,
   );
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${parts.join("")}</svg>`;
 }

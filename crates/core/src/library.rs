@@ -18,7 +18,7 @@ pub struct LibraryExercise {
     pub kind: String,
     pub primary: Vec<String>,
     pub secondary: Vec<String>,
-    /// "liftbook" (curated) or "free-exercise-db" (muscles auto-mapped).
+    /// "liftbook" (curated, the id predates the FitLedger name) or "free-exercise-db" (muscles auto-mapped).
     pub source: String,
 }
 

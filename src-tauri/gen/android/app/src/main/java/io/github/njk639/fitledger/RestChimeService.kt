@@ -1,4 +1,4 @@
-package io.github.njk639.liftbook
+package io.github.njk639.fitledger
 
 import android.app.Service
 import android.content.Context
@@ -27,7 +27,7 @@ import android.os.VibratorManager
 class RestChimeService : Service() {
     companion object {
         const val LEAD_MS = 3_000L
-        const val ACTION_STOP = "io.github.njk639.liftbook.STOP_CHIME"
+        const val ACTION_STOP = "io.github.njk639.fitledger.STOP_CHIME"
         @Volatile var running = false
     }
 
@@ -70,7 +70,7 @@ class RestChimeService : Service() {
         }
         reset()
         wake = getSystemService(PowerManager::class.java)
-            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "liftbook:rest")
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "fitledger:rest")
             .apply { acquire((endsAt - System.currentTimeMillis()).coerceAtLeast(0L) + 10_000L) }
 
         val now = System.currentTimeMillis()

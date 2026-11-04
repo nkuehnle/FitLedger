@@ -1,4 +1,4 @@
-package io.github.njk639.liftbook
+package io.github.njk639.fitledger
 
 import android.app.AlarmManager
 import android.app.NotificationChannel
@@ -23,7 +23,7 @@ object WeighInReminder {
     private const val PREFS = "weigh_in_reminder"
     private const val CHANNEL = "weigh_in"
     private const val ID = 1003
-    const val ACTION = "io.github.njk639.liftbook.WEIGH_IN"
+    const val ACTION = "io.github.njk639.fitledger.WEIGH_IN"
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private fun todayIso() = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Calendar.getInstance().time)
@@ -83,7 +83,7 @@ object WeighInReminder {
         val n = NotificationCompat.Builder(ctx, CHANNEL)
             .setSmallIcon(ctx.applicationInfo.icon)
             .setContentTitle("Weigh-in day")
-            .setContentText("Step on the scale and log it in Liftbook")
+            .setContentText("Step on the scale and log it in FitLedger")
             .setAutoCancel(true)
             .setContentIntent(PendingIntent.getActivity(ctx, 2, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
             .build()

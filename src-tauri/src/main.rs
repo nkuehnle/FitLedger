@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    liftbook_lib::run()
+    fitledger_lib::run()
 }

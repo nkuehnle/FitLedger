@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Liftbook",
-  "version": "0.1.11",
-  "identifier": "io.github.njk639.liftbook",
+  "productName": "FitLedger",
+  "version": "1.0.0",
+  "identifier": "io.github.njk639.fitledger",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Liftbook",
+        "title": "FitLedger",
         "width": 1200,
         "height": 800
       }

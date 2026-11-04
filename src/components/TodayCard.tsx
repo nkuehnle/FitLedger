@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, type EnergyPoint, type WeighInRow } from "../api";
+import { api, type DayHealth, type EnergyPoint, type WeighInRow } from "../api";
+import { recoveryText } from "../recovery";
 import { usePrefs } from "../App";
 import { today } from "../charts/RangePicker";
 import { nowLocal, parseLocal, toUnit } from "../format";
@@ -17,7 +18,9 @@ export function TodayCard() {
   const [goal, setGoal] = useState<GoalInfo | null>(null);
   const [plan, setPlan] = useState<WeighInPlan | null>(null);
   const [entry, setEntry] = useState("");
+  const [days, setDays] = useState<DayHealth[]>([]);
   const load = () => {
+    api.dayHealth().then(setDays);
     api.weighIns(false).then(setRows);
     api.energyBalance(14).then(setEnergy);
     api.currentGoal().then(setGoal);
@@ -47,6 +50,7 @@ export function TodayCard() {
   const kcal = (v: number) => Math.round(v).toLocaleString();
   const close = s?.offKcal != null && Math.abs(s.offKcal) <= 100;
   const stale = last && parseLocal(last.at).getTime() < Date.now() - 10 * 86400000;
+  const recovery = recoveryText(days, today());
   return (
     <section className="card today-card">
       <div className="today-grid">
@@ -115,6 +119,7 @@ export function TodayCard() {
           </div>
         </div>
       </div>
+      {recovery && <div className="small muted today-recovery">{recovery}</div>}
     </section>
   );
 }

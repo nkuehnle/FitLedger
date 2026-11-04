@@ -1,9 +1,9 @@
 //! Importer tests on small synthetic files committed to the repo.
 
-use liftbook_core::SetType;
-use liftbook_core::db::Db;
-use liftbook_core::strong::{ImportOptions, parse_bodyweight, parse_workouts};
-use liftbook_core::units::{DistanceUnit, WeightUnit};
+use fitledger_core::SetType;
+use fitledger_core::db::Db;
+use fitledger_core::strong::{ImportOptions, parse_bodyweight, parse_workouts};
+use fitledger_core::units::{DistanceUnit, WeightUnit};
 
 fn fixture(name: &str) -> String {
     std::fs::read_to_string(format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap()
@@ -51,7 +51,7 @@ fn current_format_kg() {
 fn old_semicolon_format_needs_unit() {
     let text = fixture("strong_old_semicolon.csv");
     assert!(
-        matches!(parse_workouts(&text, ImportOptions::default()), Err(liftbook_core::Error::MissingWeightUnit)),
+        matches!(parse_workouts(&text, ImportOptions::default()), Err(fitledger_core::Error::MissingWeightUnit)),
         "no unit in file and none given"
     );
 
@@ -91,7 +91,7 @@ fn reimport_is_idempotent() {
 #[test]
 fn every_builtin_program_installs() {
     let start = chrono::NaiveDate::from_ymd_opt(2026, 11, 2).unwrap();
-    for p in liftbook_core::planning::programs() {
+    for p in fitledger_core::planning::programs() {
         let mut db = Db::open_in_memory().unwrap();
         let ids = db.install_program(&p.id, start).unwrap();
         assert_eq!(ids.len(), p.templates.len(), "{}", p.id);
@@ -176,9 +176,9 @@ fn strong_export_round_trips() {
 
 #[test]
 fn backup_and_restore() {
-    let dir = std::env::temp_dir().join(format!("liftbook-test-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("fitledger-test-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let backup = dir.join("backup.liftbook");
+    let backup = dir.join("backup.fitledger");
 
     let imp = parse_workouts(&fixture("strong_current_kg.csv"), ImportOptions::default()).unwrap();
     let mut a = Db::open_in_memory().unwrap();
@@ -197,14 +197,14 @@ fn backup_and_restore() {
     assert_eq!(b.setting("weight_unit").unwrap().as_deref(), Some("kg"));
     assert!(b.export_json().unwrap()["tables"]["workout_set"].as_array().unwrap().len() == 12);
 
-    std::fs::write(dir.join("junk.liftbook"), b"not a database").unwrap();
-    assert!(Db::inspect_backup(dir.join("junk.liftbook")).is_err());
+    std::fs::write(dir.join("junk.fitledger"), b"not a database").unwrap();
+    assert!(Db::inspect_backup(dir.join("junk.fitledger")).is_err());
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
 #[test]
 fn warmup_sets_and_sticky_notes() {
-    use liftbook_core::live::StartFrom;
+    use fitledger_core::live::StartFrom;
     let mut db = Db::open_in_memory().unwrap();
     let now = chrono::NaiveDateTime::parse_from_str("2026-11-02 17:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
     let w = db.start_workout(&StartFrom::Empty, now, None).unwrap();
@@ -222,8 +222,8 @@ fn warmup_sets_and_sticky_notes() {
 
 #[test]
 fn superset_from_template_gets_even_rounds() {
-    use liftbook_core::live::StartFrom;
-    use liftbook_core::templates::{Template, TemplateExercise};
+    use fitledger_core::live::StartFrom;
+    use fitledger_core::templates::{Template, TemplateExercise};
     let mut db = Db::open_in_memory().unwrap();
     let ex = |db: &Db, slug, sets| TemplateExercise {
         exercise_id: db.exercise_id(slug).unwrap().unwrap(),
@@ -245,7 +245,7 @@ fn superset_from_template_gets_even_rounds() {
 
 #[test]
 fn perform_again_keeps_warmups_as_warmups() {
-    use liftbook_core::live::{SetUpdate, StartFrom};
+    use fitledger_core::live::{SetUpdate, StartFrom};
     let mut db = Db::open_in_memory().unwrap();
     let t = |h| chrono::NaiveDate::from_ymd_opt(2026, 11, 2).unwrap().and_hms_opt(h, 0, 0).unwrap();
     let w = db.start_workout(&StartFrom::Empty, t(9), None).unwrap();

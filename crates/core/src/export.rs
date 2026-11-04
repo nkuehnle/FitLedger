@@ -15,7 +15,7 @@ use crate::{Error, Result};
 const USER_TABLES: &[&str] = &[
     "setting", "exercise", "exercise_alias", "exercise_muscle", "name_mapping", "template", "template_exercise",
     "workout", "workout_exercise", "workout_set", "bodyweight", "inbody_scan", "diet_day", "schedule",
-    "schedule_slot", "phase", "muscle_target", "csv_mapping", "body_measurement",
+    "schedule_slot", "phase", "muscle_target", "csv_mapping", "body_measurement", "day_health",
 ];
 
 #[derive(Debug, Clone, Serialize)]
@@ -203,7 +203,7 @@ impl Db {
             tables.insert(t.to_string(), arr.into());
         }
         Ok(serde_json::json!({
-            "format": "liftbook-export",
+            "format": "fitledger-export",
             "schema_version": backup_info(self.conn())?.schema_version,
             "units": { "weight": "kg", "distance": "m", "times": "local wall-clock YYYY-MM-DD HH:MM:SS" },
             "tables": tables,
@@ -229,7 +229,7 @@ impl Db {
         }
         let tables: i64 = conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'workout'", [], |r| r.get(0))?;
         if tables == 0 {
-            return Err(Error::Format("not a Liftbook backup".into()));
+            return Err(Error::Format("not a FitLedger backup".into()));
         }
         backup_info(&conn)
     }
@@ -243,7 +243,7 @@ impl Db {
         let info = Self::inspect_backup(&path)?;
         let current = MIGRATION_COUNT as i64;
         if info.schema_version > current {
-            return Err(Error::Format("this backup was made by a newer version of Liftbook; update the app first".into()));
+            return Err(Error::Format("this backup was made by a newer version of FitLedger; update the app first".into()));
         }
         let src = Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
         {

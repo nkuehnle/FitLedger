@@ -26,7 +26,7 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
 /** Yes/no question as a native dialog (window.confirm doesn't work in every WebView). */
 export async function ask(text: string): Promise<boolean> {
   try {
-    return await confirm(text, { title: "Liftbook", kind: "warning" });
+    return await confirm(text, { title: "FitLedger", kind: "warning" });
   } catch {
     return window.confirm(text);
   }
@@ -34,7 +34,7 @@ export async function ask(text: string): Promise<boolean> {
 
 export async function tell(text: string): Promise<void> {
   try {
-    await message(text, { title: "Liftbook" });
+    await message(text, { title: "FitLedger" });
   } catch {
     window.alert(text);
   }

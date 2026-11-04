@@ -2,7 +2,7 @@
 """Builds data/library/exercises.json from the curated list plus free-exercise-db.
 
 free-exercise-db (https://github.com/yuhonas/free-exercise-db) is released under the Unlicense.
-Its muscles are coarse ("shoulders", "chest"), so they are refined into Liftbook's muscle ids by
+Its muscles are coarse ("shoulders", "chest"), so they are refined into FitLedger's muscle ids by
 name rules. Those entries are marked source="free-exercise-db" so the app can flag them as
 auto-mapped.
 

@@ -93,6 +93,9 @@ pub struct WorkoutDetail {
     pub notes: Option<String>,
     pub volume_kg: f64,
     pub exercises: Vec<ExerciseView>,
+    /// From a watch, when one recorded the workout.
+    pub avg_hr: Option<i64>,
+    pub max_hr: Option<i64>,
 }
 
 /// Exercise rows of the given workouts, in order, with the resolved display name and load mode.
@@ -223,18 +226,19 @@ impl Db {
         let head = self
             .conn()
             .query_row(
-                "SELECT name, started_at_local, tz_name, duration_s, notes, finished, template_id, rest_ends_at, rest_total_s
+                "SELECT name, started_at_local, tz_name, duration_s, notes, finished, template_id, rest_ends_at, rest_total_s, avg_hr, max_hr
                  FROM workout WHERE id = ?1",
                 [id],
                 |r| {
                     Ok((
                         (r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?),
                         (r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?),
+                        (r.get(9)?, r.get(10)?),
                     ))
                 },
             )
             .optional()?;
-        let Some(((name, started_at_local, tz_name, duration_s, notes), (finished, template_id, rest_ends_at, rest_total_s))) =
+        let Some(((name, started_at_local, tz_name, duration_s, notes), (finished, template_id, rest_ends_at, rest_total_s), (avg_hr, max_hr))) =
             head
         else {
             return Ok(None);
@@ -255,6 +259,8 @@ impl Db {
             notes,
             volume_kg: exercises.iter().map(|e| volume(&e.sets, &e.load_mode)).sum(),
             exercises,
+            avg_hr,
+            max_hr,
         }))
     }
 }

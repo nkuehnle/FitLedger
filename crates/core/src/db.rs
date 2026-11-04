@@ -298,6 +298,21 @@ ALTER TABLE phase ADD COLUMN weekly_rate_kg REAL;
 -- Migration 6: cardio details per set (a segment of a run, ride or row).
 ALTER TABLE workout_set ADD COLUMN avg_hr INTEGER;
 ALTER TABLE workout_set ADD COLUMN kcal REAL;
+"#, r#"
+-- Migration 7: watches and health apps (Health Connect, Garmin .fit files).
+-- Heart rate over a whole workout, from the watch.
+ALTER TABLE workout ADD COLUMN avg_hr INTEGER;
+ALTER TABLE workout ADD COLUMN max_hr INTEGER;
+-- One row per day and source: sleep (ending that morning), resting HR, HRV (RMSSD) and steps.
+CREATE TABLE day_health (
+    date       TEXT NOT NULL,
+    source     TEXT NOT NULL,
+    sleep_s    INTEGER,
+    resting_hr INTEGER,
+    hrv_ms     REAL,
+    steps      INTEGER,
+    PRIMARY KEY (date, source)
+);
 "#];
 
 pub(crate) const MIGRATION_COUNT: usize = MIGRATIONS.len();

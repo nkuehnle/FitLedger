@@ -1,4 +1,4 @@
-package io.github.njk639.liftbook
+package io.github.njk639.fitledger
 
 import android.Manifest
 import android.app.Activity
@@ -36,7 +36,7 @@ object RestNotifications {
     private val OLD_CHANNELS = listOf("rest_over", "rest_over_v2", "rest_over_v3")
     const val ID_STATUS = 1001
     const val ID_ALERT = 1002
-    const val ACTION_REST_OVER = "io.github.njk639.liftbook.REST_OVER"
+    const val ACTION_REST_OVER = "io.github.njk639.fitledger.REST_OVER"
     private const val PREFS = "rest_timer"
 
     fun ensureChannels(ctx: Context) {
@@ -272,19 +272,19 @@ class RestTimerPlugin(private val activity: Activity) : Plugin(activity) {
         invoke.resolve()
     }
 
-    /** Copies an image from the app's cache into the gallery (Pictures/Liftbook). */
+    /** Copies an image from the app's cache into the gallery (Pictures/FitLedger). */
     @Command
     fun saveImage(invoke: Invoke) {
-        saveTo(invoke, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "Pictures/Liftbook", "Saving to Photos")
+        saveTo(invoke, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "Pictures/FitLedger", "Saving to Photos")
     }
 
-    /** Copies a backup or export from the app's cache into Downloads/Liftbook. */
+    /** Copies a backup or export from the app's cache into Downloads/FitLedger. */
     @Command
     fun saveDownload(invoke: Invoke) {
-        saveTo(invoke, android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, "Download/Liftbook", "Saving to Downloads")
+        saveTo(invoke, android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, "Download/FitLedger", "Saving to Downloads")
     }
 
-    /** Keeps only the newest `keep` files in Downloads/Liftbook whose names start with `prefix`
+    /** Keeps only the newest `keep` files in Downloads/FitLedger whose names start with `prefix`
      *  (names carry the date, so newest sorts last). Files the app no longer owns are skipped. */
     @Command
     fun pruneDownloads(invoke: Invoke) {
@@ -300,7 +300,7 @@ class RestTimerPlugin(private val activity: Activity) : Plugin(activity) {
             collection,
             arrayOf(android.provider.MediaStore.MediaColumns._ID, android.provider.MediaStore.MediaColumns.DISPLAY_NAME),
             "${android.provider.MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? AND ${android.provider.MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?",
-            arrayOf("Download/Liftbook%", "${a.prefix}%"),
+            arrayOf("Download/FitLedger%", "${a.prefix}%"),
             null,
         )?.use { c ->
             while (c.moveToNext()) found.add(c.getLong(0) to c.getString(1))

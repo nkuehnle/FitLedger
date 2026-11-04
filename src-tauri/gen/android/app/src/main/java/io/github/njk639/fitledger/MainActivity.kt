@@ -1,4 +1,4 @@
-package io.github.njk639.liftbook
+package io.github.njk639.fitledger
 
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge

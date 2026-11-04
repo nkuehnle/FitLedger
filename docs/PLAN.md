@@ -1,4 +1,4 @@
-# Liftbook plan
+# FitLedger plan
 
 Personal, offline lift tracker built around supersets. Tauri 2 (Android, Windows, Linux),
 Rust + SQLite backend, React + TypeScript + D3 frontend.
@@ -6,8 +6,8 @@ Rust + SQLite backend, React + TypeScript + D3 frontend.
 ## Layout
 
 - `crates/core`: domain logic with no Tauri dependency (importers, matching, schedule, stats,
-  storage). Tested with `cargo test -p liftbook-core`.
-- `src-tauri`: Tauri shell, thin commands over `liftbook-core`, platform plugins.
+  storage). Tested with `cargo test -p fitledger-core`.
+- `src-tauri`: Tauri shell, thin commands over `fitledger-core`, platform plugins.
 - `src`: React UI.
 
 Storage: weights in kg, distances in metres, local wall-clock times plus UTC offset. Display units
@@ -50,7 +50,7 @@ are a setting.
   the app requires weight or calorie data.
 - **Cloud backup** is deferred until after the app has been used. Local backup/restore and exports
   are in scope.
-- **Personal data never enters git.** Real-data tests read `$LIFTBOOK_TEST_DATA` (default
+- **Personal data never enters git.** Real-data tests read `$FITLEDGER_TEST_DATA` (default
   `~/my_data`) and skip when it's absent.
 
 ## Milestones

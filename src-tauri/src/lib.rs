@@ -1,4 +1,4 @@
-//! Tauri shell: thin commands over `liftbook-core`. Every command locks the database, runs one
+//! Tauri shell: thin commands over `fitledger-core`. Every command locks the database, runs one
 //! core operation and maps errors to strings for the UI.
 
 use std::collections::HashSet;
@@ -6,19 +6,19 @@ use std::sync::Mutex;
 
 use base64::Engine;
 use chrono::{Local, NaiveDate, NaiveDateTime};
-use liftbook_core::body::{CsvMapping, DietDay, EnergyPoint, InBodyCsvPreview, InBodyScan, MeasurementRow, WeighInRow, BODY_PARTS, INBODY_FIELDS};
-use liftbook_core::db::{Counts, Db, ImportOutcome};
-use liftbook_core::exercises::{ExerciseEdit, ExerciseInfo, PerHandSuspect};
-use liftbook_core::export::BackupInfo;
-use liftbook_core::history::{WorkoutCard, WorkoutDetail};
-use liftbook_core::library::{library, Muscle, MuscleGroup};
-use liftbook_core::live::{ExerciseUpdate, OrderEntry, Previous, SetUpdate, StartFrom, WorkoutUpdate};
-use liftbook_core::planning::{Goal, GoalEntry, HistoryProposal, MuscleTarget, Phase, Program, Schedule, Suggestion};
-use liftbook_core::review::{NameReview, SuggestionView};
-use liftbook_core::stats::{DiscomfortPoint, ExerciseStats, LastTrained, MuscleStat, PeriodCount, Streak, WeekMuscleSets, WorkoutPoint};
-use liftbook_core::strong::{self, ImportOptions};
-use liftbook_core::templates::{CreatedTemplate, Template};
-use liftbook_core::units::{DistanceUnit, WeightUnit};
+use fitledger_core::body::{CsvMapping, DietDay, EnergyPoint, InBodyCsvPreview, InBodyScan, MeasurementRow, WeighInRow, BODY_PARTS, INBODY_FIELDS};
+use fitledger_core::db::{Counts, Db, ImportOutcome};
+use fitledger_core::exercises::{ExerciseEdit, ExerciseInfo, PerHandSuspect};
+use fitledger_core::export::BackupInfo;
+use fitledger_core::history::{WorkoutCard, WorkoutDetail};
+use fitledger_core::library::{library, Muscle, MuscleGroup};
+use fitledger_core::live::{ExerciseUpdate, OrderEntry, Previous, SetUpdate, StartFrom, WorkoutUpdate};
+use fitledger_core::planning::{Goal, GoalEntry, HistoryProposal, MuscleTarget, Phase, Program, Schedule, Suggestion};
+use fitledger_core::review::{NameReview, SuggestionView};
+use fitledger_core::stats::{DiscomfortPoint, ExerciseStats, LastTrained, MuscleStat, PeriodCount, Streak, WeekMuscleSets, WorkoutPoint};
+use fitledger_core::strong::{self, ImportOptions};
+use fitledger_core::templates::{CreatedTemplate, Template};
+use fitledger_core::units::{DistanceUnit, WeightUnit};
 use serde::Serialize;
 use tauri::{Manager, State};
 
@@ -26,15 +26,15 @@ struct AppState(Mutex<Db>);
 
 type CmdResult<T> = Result<T, String>;
 
-fn err(e: liftbook_core::Error) -> String {
+fn err(e: fitledger_core::Error) -> String {
     match e {
         // The UI looks for this code to ask the user for a unit.
-        liftbook_core::Error::MissingWeightUnit => "MISSING_WEIGHT_UNIT".into(),
+        fitledger_core::Error::MissingWeightUnit => "MISSING_WEIGHT_UNIT".into(),
         e => e.to_string(),
     }
 }
 
-fn with<T>(state: &State<AppState>, f: impl FnOnce(&mut Db) -> liftbook_core::Result<T>) -> CmdResult<T> {
+fn with<T>(state: &State<AppState>, f: impl FnOnce(&mut Db) -> fitledger_core::Result<T>) -> CmdResult<T> {
     let mut db = state.0.lock().map_err(|_| "database lock poisoned".to_string())?;
     f(&mut db).map_err(err)
 }
@@ -52,12 +52,12 @@ fn opts(weight_unit: Option<WeightUnit>, distance_unit: Option<DistanceUnit>) ->
     ImportOptions { weight_unit, distance_unit }
 }
 
-fn unit_setting(db: &Db) -> liftbook_core::Result<WeightUnit> {
+fn unit_setting(db: &Db) -> fitledger_core::Result<WeightUnit> {
     Ok(if db.setting("weight_unit")?.as_deref() == Some("kg") { WeightUnit::Kg } else { WeightUnit::Lb })
 }
 
 /// Remembers the file's unit as the display unit the first time anything is imported.
-fn default_display_unit(db: &Db, unit: Option<WeightUnit>) -> liftbook_core::Result<()> {
+fn default_display_unit(db: &Db, unit: Option<WeightUnit>) -> fitledger_core::Result<()> {
     if let (None, Some(u)) = (db.setting("weight_unit")?, unit) {
         db.set_setting("weight_unit", if u == WeightUnit::Kg { "kg" } else { "lb" })?;
     }
@@ -488,7 +488,7 @@ fn current_goal(state: State<AppState>, today: String) -> CmdResult<GoalInfo> {
 }
 
 #[tauri::command]
-fn progress_health(state: State<AppState>, today: String) -> CmdResult<Vec<liftbook_core::health::MuscleHealth>> {
+fn progress_health(state: State<AppState>, today: String) -> CmdResult<Vec<fitledger_core::health::MuscleHealth>> {
     let d = date(&today)?;
     with(&state, |db| db.progress_health(d))
 }
@@ -537,7 +537,7 @@ fn apply_history_proposal(state: State<AppState>, proposal: HistoryProposal, sta
 
 #[tauri::command]
 fn programs() -> Vec<Program> {
-    liftbook_core::planning::programs()
+    fitledger_core::planning::programs()
 }
 
 #[tauri::command]
@@ -678,7 +678,7 @@ fn export_text(state: &State<AppState>, kind: &str) -> CmdResult<String> {
             "diet" => db.export_diet_csv(),
             "measurements" => db.export_measurements_csv(unit),
             "json" => Ok(serde_json::to_string_pretty(&db.export_json()?).expect("json serializes")),
-            other => Err(liftbook_core::Error::Format(format!("unknown export {other:?}"))),
+            other => Err(fitledger_core::Error::Format(format!("unknown export {other:?}"))),
         }
     })
 }
@@ -705,14 +705,14 @@ fn share_file(app: &tauri::AppHandle, path: &std::path::Path, mime: &str, title:
     native_call(app, "shareFile", serde_json::json!({ "path": path.to_string_lossy(), "mime": mime, "title": title }))
 }
 
-/// Shares the file, or with `to_downloads` copies it into Downloads/Liftbook and says where.
+/// Shares the file, or with `to_downloads` copies it into Downloads/FitLedger and says where.
 fn share_or_save(app: &tauri::AppHandle, path: &std::path::Path, mime: &str, title: &str, to_downloads: bool) -> CmdResult<Option<String>> {
     if !to_downloads {
         return share_file(app, path, mime, title).map(|_| None);
     }
     native_call(app, "saveDownload", serde_json::json!({ "path": path.to_string_lossy(), "mime": mime, "title": "" }))?;
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    Ok(Some(format!("Download/Liftbook/{name}")))
+    Ok(Some(format!("Download/FitLedger/{name}")))
 }
 
 fn today_stamp() -> String {
@@ -723,21 +723,21 @@ fn today_stamp() -> String {
 fn share_export(app: tauri::AppHandle, state: State<AppState>, kind: String, to_downloads: bool) -> CmdResult<Option<String>> {
     let text = export_text(&state, &kind)?;
     let (name, mime) = match kind.as_str() {
-        "json" => ("liftbook-export.json", "application/json"),
-        "strong" => ("liftbook-workouts.csv", "text/csv"),
-        "bodyweight" => ("liftbook-bodyweight.csv", "text/csv"),
-        "inbody" => ("liftbook-body-composition.csv", "text/csv"),
-        "measurements" => ("liftbook-measurements.csv", "text/csv"),
-        _ => ("liftbook-diet.csv", "text/csv"),
+        "json" => ("fitledger-export.json", "application/json"),
+        "strong" => ("fitledger-workouts.csv", "text/csv"),
+        "bodyweight" => ("fitledger-bodyweight.csv", "text/csv"),
+        "inbody" => ("fitledger-body-composition.csv", "text/csv"),
+        "measurements" => ("fitledger-measurements.csv", "text/csv"),
+        _ => ("fitledger-diet.csv", "text/csv"),
     };
-    let path = share_dir(&app)?.join(name.replace("liftbook-", &format!("liftbook-{}-", today_stamp())));
+    let path = share_dir(&app)?.join(name.replace("fitledger-", &format!("fitledger-{}-", today_stamp())));
     std::fs::write(&path, text).map_err(|e| e.to_string())?;
     share_or_save(&app, &path, mime, "Export", to_downloads)
 }
 
 #[tauri::command]
 fn share_backup(app: tauri::AppHandle, state: State<AppState>, to_downloads: bool) -> CmdResult<(BackupInfo, Option<String>)> {
-    let path = share_dir(&app)?.join(format!("liftbook-{}.liftbook", today_stamp()));
+    let path = share_dir(&app)?.join(format!("fitledger-{}.fitledger", today_stamp()));
     let info = backup_to(state, path.to_string_lossy().into_owned())?;
     let saved = share_or_save(&app, &path, "application/octet-stream", "Save backup", to_downloads)?;
     Ok((info, saved))
@@ -766,7 +766,7 @@ struct InBodyImageRead {
 #[tauri::command]
 async fn read_inbody_image(data: String, mass_unit: Option<String>) -> CmdResult<InBodyImageRead> {
     let bytes = base64::engine::general_purpose::STANDARD.decode(data).map_err(|e| e.to_string())?;
-    let r = tauri::async_runtime::spawn_blocking(move || liftbook_ocr::read_inbody580(&bytes))
+    let r = tauri::async_runtime::spawn_blocking(move || fitledger_ocr::read_inbody580(&bytes))
         .await
         .map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())?;
@@ -779,7 +779,7 @@ async fn read_inbody_image(data: String, mass_unit: Option<String>) -> CmdResult
         .values
         .into_iter()
         .map(|(k, v)| {
-            let kind = liftbook_core::body::INBODY_FIELDS.iter().find(|f| f.0 == k).map(|f| f.2).unwrap_or("");
+            let kind = fitledger_core::body::INBODY_FIELDS.iter().find(|f| f.0 == k).map(|f| f.2).unwrap_or("");
             let v = if kind == "kg" || kind == "l" { v * factor } else { v };
             (k, v)
         })
@@ -787,7 +787,7 @@ async fn read_inbody_image(data: String, mass_unit: Option<String>) -> CmdResult
     Ok(InBodyImageRead { measured_at: r.measured_at, values, doubtful: r.doubtful, mass_unit: r.mass_unit })
 }
 
-/// Android: saves a PNG (sent as base64) to the gallery, Pictures/Liftbook.
+/// Android: saves a PNG (sent as base64) to the gallery, Pictures/FitLedger.
 #[tauri::command]
 fn save_png_to_photos(app: tauri::AppHandle, name: String, data: String) -> CmdResult<()> {
     let bytes = base64::engine::general_purpose::STANDARD.decode(data).map_err(|e| e.to_string())?;
@@ -807,7 +807,7 @@ struct StagedBackup {
 #[tauri::command]
 fn stage_backup(app: tauri::AppHandle, data: String) -> CmdResult<StagedBackup> {
     let bytes = base64::engine::general_purpose::STANDARD.decode(data).map_err(|e| e.to_string())?;
-    let path = share_dir(&app)?.join("restore.liftbook");
+    let path = share_dir(&app)?.join("restore.fitledger");
     std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
     let info = Db::inspect_backup(&path).map_err(err)?;
     Ok(StagedBackup { path: path.to_string_lossy().into_owned(), info })
@@ -816,18 +816,101 @@ fn stage_backup(app: tauri::AppHandle, data: String) -> CmdResult<StagedBackup> 
 // ---- Cardio ---------------------------------------------------------------------------------------
 
 #[tauri::command]
-fn cardio_sessions(state: State<AppState>) -> CmdResult<Vec<liftbook_core::cardio::CardioSession>> {
+fn cardio_sessions(state: State<AppState>) -> CmdResult<Vec<fitledger_core::cardio::CardioSession>> {
     with(&state, |db| db.cardio_sessions())
 }
 
+// ---- Watches and health apps --------------------------------------------------------------------
+//
+// Android: Health Connect (gen/android/.../HealthConnectPlugin.kt), where Garmin Connect, Fitbit and
+// Oura write. Everywhere: Garmin .fit files.
+
+#[cfg(target_os = "android")]
+struct HealthConnect(tauri::plugin::PluginHandle<tauri::Wry>);
+
+/// Calls the Health Connect plugin off the main thread (it may wait on the permission screen).
+#[allow(unused_variables)]
+async fn health_connect_call(app: &tauri::AppHandle, method: &'static str, args: serde_json::Value) -> CmdResult<serde_json::Value> {
+    #[cfg(target_os = "android")]
+    {
+        let app = app.clone();
+        return tauri::async_runtime::spawn_blocking(move || {
+            let hc = app.try_state::<HealthConnect>().ok_or("Health Connect isn't set up")?;
+            hc.0.run_mobile_plugin::<serde_json::Value>(method, args).map_err(|e| e.to_string())
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(target_os = "android"))]
+    Err("Health Connect is only on Android".into())
+}
+
+/// { available: "yes" | "update" | "no", granted, total, synced_at }.
 #[tauri::command]
-fn log_cardio(state: State<AppState>, entry: liftbook_core::cardio::CardioEntry) -> CmdResult<i64> {
+async fn health_connect_status(app: tauri::AppHandle, state: State<'_, AppState>) -> CmdResult<serde_json::Value> {
+    let mut v = health_connect_call(&app, "status", serde_json::json!({})).await?;
+    v["synced_at"] = with(&state, |db| db.setting("health_connect_synced_at"))?.into();
+    Ok(v)
+}
+
+#[tauri::command]
+async fn health_connect_connect(app: tauri::AppHandle) -> CmdResult<serde_json::Value> {
+    health_connect_call(&app, "connect", serde_json::json!({})).await
+}
+
+#[tauri::command]
+async fn health_connect_open(app: tauri::AppHandle) -> CmdResult<serde_json::Value> {
+    health_connect_call(&app, "openSettings", serde_json::json!({})).await
+}
+
+/// Reads everything new since the last sync (a year back the first time) and imports it.
+#[tauri::command]
+async fn health_connect_sync(app: tauri::AppHandle, state: State<'_, AppState>) -> CmdResult<fitledger_core::wearables::WearableSummary> {
+    const FMT: &str = "%Y-%m-%d %H:%M:%S";
+    let now = Local::now().naive_local();
+    let (since, windows) = with(&state, |db| {
+        let last = db.setting("health_connect_synced_at")?.and_then(|s| chrono::NaiveDateTime::parse_from_str(&s, FMT).ok());
+        // Re-read a few days: sleep and daily totals settle after the fact.
+        let since = last.map(|t| t - chrono::Duration::days(3)).unwrap_or(now - chrono::Duration::days(365)).min(now);
+        let since = since.format(FMT).to_string();
+        let windows = db.hr_windows(&since)?;
+        Ok((since, windows))
+    })?;
+    let windows: Vec<_> = windows
+        .iter()
+        .map(|w| serde_json::json!({ "workoutId": w.workout_id, "start": w.start, "end": w.end, "utcOffsetMin": w.utc_offset_min }))
+        .collect();
+    let data = health_connect_call(&app, "read", serde_json::json!({ "since": since, "windows": windows })).await?;
+    let data: fitledger_core::wearables::WearableImport = serde_json::from_value(data).map_err(|e| e.to_string())?;
+    with(&state, |db| {
+        let out = db.import_wearable(&data)?;
+        db.set_setting("health_connect_synced_at", &now.format(FMT).to_string())?;
+        Ok(out)
+    })
+}
+
+/// Activities and weigh-ins from a Garmin .fit file (or a .zip of them), base64-encoded.
+#[tauri::command]
+fn import_fit(state: State<AppState>, data: String) -> CmdResult<fitledger_core::wearables::WearableSummary> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data).map_err(|e| e.to_string())?;
+    let parsed = fitledger_core::wearables::parse_fit(&bytes).map_err(err)?;
+    with(&state, |db| db.import_wearable(&parsed))
+}
+
+#[tauri::command]
+fn day_health(state: State<AppState>) -> CmdResult<Vec<fitledger_core::wearables::DayHealth>> {
+    with(&state, |db| db.day_health())
+}
+
+#[tauri::command]
+fn log_cardio(state: State<AppState>, entry: fitledger_core::cardio::CardioEntry) -> CmdResult<i64> {
     with(&state, |db| db.log_cardio(&entry))
 }
 
 // ---- Automatic backups ------------------------------------------------------------------------------
 //
-// Once a week (checked when the app starts) a full backup goes to Download/Liftbook on Android, or
+// Once a week (checked when the app starts) a full backup goes to Download/FitLedger on Android, or
 // the app data folder's auto-backups/ elsewhere; only the newest AUTO_KEEP are kept.
 
 const AUTO_EVERY_DAYS: i64 = 7;
@@ -849,14 +932,14 @@ fn auto_backup(app: tauri::AppHandle, state: State<AppState>, force: bool) -> Cm
     if !force && (!enabled || !due || workouts == 0) {
         return Ok(None);
     }
-    let name = format!("liftbook-auto-{}.liftbook", today_stamp());
+    let name = format!("fitledger-auto-{}.fitledger", today_stamp());
     #[cfg(target_os = "android")]
     let place = {
         let path = share_dir(&app)?.join(&name);
         with(&state, |db| db.backup_to(&path))?;
         native_call(&app, "saveDownload", serde_json::json!({ "path": path.to_string_lossy(), "mime": "application/octet-stream", "title": "" }))?;
-        native_call(&app, "pruneDownloads", serde_json::json!({ "prefix": "liftbook-auto-", "keep": AUTO_KEEP }))?;
-        format!("Download/Liftbook/{name}")
+        native_call(&app, "pruneDownloads", serde_json::json!({ "prefix": "fitledger-auto-", "keep": AUTO_KEEP }))?;
+        format!("Download/FitLedger/{name}")
     };
     #[cfg(not(target_os = "android"))]
     let place = {
@@ -867,7 +950,7 @@ fn auto_backup(app: tauri::AppHandle, state: State<AppState>, force: bool) -> Cm
         let mut old: Vec<_> = std::fs::read_dir(&dir)
             .map_err(|e| e.to_string())?
             .filter_map(|e| e.ok().map(|e| e.path()))
-            .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("liftbook-auto-")))
+            .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("fitledger-auto-")))
             .collect();
         old.sort();
         for p in old.iter().rev().skip(AUTO_KEEP) {
@@ -946,8 +1029,10 @@ fn rest_timer_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
         .setup(|_app, _api| {
             #[cfg(target_os = "android")]
             {
-                let handle = _api.register_android_plugin("io.github.njk639.liftbook", "RestTimerPlugin")?;
+                let handle = _api.register_android_plugin("io.github.njk639.fitledger", "RestTimerPlugin")?;
                 _app.manage(RestTimer(handle));
+                let handle = _api.register_android_plugin("io.github.njk639.fitledger", "HealthConnectPlugin")?;
+                _app.manage(HealthConnect(handle));
             }
             Ok(())
         })
@@ -1018,15 +1103,32 @@ fn set_setting(state: State<AppState>, key: String, value: String) -> CmdResult<
 // (gen/android/app/src/main/res/xml/*backup_rules.xml) include only that folder.
 
 fn snapshot_path(dir: &std::path::Path) -> std::path::PathBuf {
-    dir.join("backup").join("liftbook.snapshot")
+    dir.join("backup").join("fitledger.snapshot")
 }
 
 /// On a fresh install restored by Android there is a snapshot but no database yet: use it.
 fn restore_account_backup_if_fresh(dir: &std::path::Path) -> std::io::Result<()> {
-    let db = dir.join("liftbook.db");
+    let db = dir.join("fitledger.db");
     let snap = snapshot_path(dir);
     if !db.exists() && snap.exists() {
         std::fs::copy(&snap, &db)?;
+    }
+    Ok(())
+}
+
+/// Desktop: the app was called Liftbook (data dir io.github.njk639.liftbook, liftbook.db). On the
+/// first FitLedger start, copy that database over; the old folder is left as it was.
+#[cfg(not(target_os = "android"))]
+fn copy_liftbook_data_if_fresh(dir: &std::path::Path) -> std::io::Result<()> {
+    let old = dir.with_file_name("io.github.njk639.liftbook");
+    if dir.join("fitledger.db").exists() || !old.join("liftbook.db").exists() {
+        return Ok(());
+    }
+    for suffix in ["", "-wal", "-shm"] {
+        let src = old.join(format!("liftbook.db{suffix}"));
+        if src.exists() {
+            std::fs::copy(&src, dir.join(format!("fitledger.db{suffix}")))?;
+        }
     }
     Ok(())
 }
@@ -1069,9 +1171,9 @@ mod tests {
 
     #[test]
     fn account_backup_snapshot_round_trip() {
-        let dir = std::env::temp_dir().join(format!("liftbook-snap-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("fitledger-snap-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let mut db = Db::open(dir.join("liftbook.db")).unwrap();
+        let mut db = Db::open(dir.join("fitledger.db")).unwrap();
         db.add_weigh_in(NaiveDateTime::parse_from_str("2026-11-01 07:00:00", "%Y-%m-%d %H:%M:%S").unwrap(), 80.0).unwrap();
         write_snapshot(&db, &dir).unwrap();
         drop(db);
@@ -1081,15 +1183,15 @@ mod tests {
         std::fs::create_dir_all(phone.join("backup")).unwrap();
         std::fs::copy(snapshot_path(&dir), snapshot_path(&phone)).unwrap();
         restore_account_backup_if_fresh(&phone).unwrap();
-        let restored = Db::open(phone.join("liftbook.db")).unwrap();
+        let restored = Db::open(phone.join("fitledger.db")).unwrap();
         assert_eq!(restored.weigh_ins(false).unwrap().len(), 1);
 
         // An existing database is never overwritten by a snapshot.
-        let mut other = Db::open(phone.join("liftbook.db")).unwrap();
+        let mut other = Db::open(phone.join("fitledger.db")).unwrap();
         other.add_weigh_in(NaiveDateTime::parse_from_str("2026-11-02 07:00:00", "%Y-%m-%d %H:%M:%S").unwrap(), 81.0).unwrap();
         drop(other);
         restore_account_backup_if_fresh(&phone).unwrap();
-        assert_eq!(Db::open(phone.join("liftbook.db")).unwrap().weigh_ins(false).unwrap().len(), 2);
+        assert_eq!(Db::open(phone.join("fitledger.db")).unwrap().weigh_ins(false).unwrap().len(), 2);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
@@ -1106,7 +1208,9 @@ pub fn run() {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             restore_account_backup_if_fresh(&dir)?;
-            let db = Db::open(dir.join("liftbook.db"))?;
+            #[cfg(not(target_os = "android"))]
+            copy_liftbook_data_if_fresh(&dir)?;
+            let db = Db::open(dir.join("fitledger.db"))?;
             app.manage(AppState(Mutex::new(db)));
             #[cfg(target_os = "android")]
             start_account_backup_snapshots(app.handle().clone(), dir);
@@ -1129,7 +1233,8 @@ pub fn run() {
             preview_inbody_csv, import_inbody_csv, diet_days, save_diet_day, energy_balance,
             body_parts, measurements, add_measurement, delete_measurement,
             export_file, backup_to, inspect_backup, restore_from, db_info, save_base64, copy_png,
-            rest_android_status, rest_android_rest, rest_android_clear, weigh_in_reminder, auto_backup, cardio_sessions, log_cardio,
+            rest_android_status, rest_android_rest, rest_android_clear, weigh_in_reminder, auto_backup, cardio_sessions, log_cardio, health_connect_status, health_connect_connect, health_connect_open,
+            health_connect_sync, import_fit, day_health,
             share_export, share_backup, share_png, save_png_to_photos, read_inbody_image, stage_backup,
             counts, get_setting, set_setting,
         ])

@@ -147,7 +147,7 @@ export default function DataPage() {
         <h2 className="section-title">Strong export</h2>
         <p className="muted small">
           In Strong: Settings → Export data. Choose the workouts, bodyweight or body measurement CSVs (several measurement files at
-          once is fine); Liftbook tells them apart. Importing the same file again won't create duplicates.
+          once is fine); FitLedger tells them apart. Importing the same file again won't create duplicates.
         </p>
         <label className="button primary file-button">
           Choose CSV files
@@ -293,7 +293,7 @@ function ExportBackup() {
         <h2 className="section-title">Back up</h2>
         {IS_ANDROID && (
           <p className="small success">
-            Android backs Liftbook up to your Google account automatically and restores it when you install the app on a new phone (check
+            Android backs FitLedger up to your Google account automatically and restores it when you install the app on a new phone (check
             Settings › Google › Backup is on). Use the file below to move your data to a computer or keep your own copy.
           </p>
         )}
@@ -312,8 +312,8 @@ function ExportBackup() {
                   return `Saved ${info.workouts} workouts to ${saved}. Restore… can open it from there.`;
                 }
                 const path = await save({
-                  defaultPath: `liftbook-${today()}.liftbook`,
-                  filters: [{ name: "Liftbook backup", extensions: ["liftbook"] }],
+                  defaultPath: `fitledger-${today()}.fitledger`,
+                  filters: [{ name: "FitLedger backup", extensions: ["fitledger"] }],
                 });
                 if (!path) return null;
                 const info = await api.backupTo(path);
@@ -362,7 +362,7 @@ function ExportBackup() {
                 run(async () => {
                   const path = await open({
                     multiple: false,
-                    filters: [{ name: "Liftbook backup", extensions: ["liftbook", "db", "sqlite"] }],
+                    filters: [{ name: "FitLedger backup", extensions: ["fitledger", "liftbook", "db", "sqlite"] }],
                   });
                   if (!path || Array.isArray(path)) return null;
                   setPending({ path, backup: await api.inspectBackup(path), local: await api.dbInfo() });
@@ -385,7 +385,7 @@ function ExportBackup() {
                   api.setSetting("auto_backup", e.target.checked ? "on" : "off");
                 }}
               />
-              Back up automatically every week to {IS_ANDROID ? "Download/Liftbook" : "the app's auto-backups folder"} (keeps the last 4)
+              Back up automatically every week to {IS_ANDROID ? "Download/FitLedger" : "the app's auto-backups folder"} (keeps the last 4)
             </label>
             {auto.on && (
               <p className="muted small">
@@ -447,27 +447,27 @@ function ExportBackup() {
       <section className="card">
         <h2 className="section-title">Export</h2>
         <div className="export-list">
-          <button className="start-row" onClick={() => exportTo("strong", "liftbook-workouts", "csv")}>
+          <button className="start-row" onClick={() => exportTo("strong", "fitledger-workouts", "csv")}>
             <span>Workouts (Strong CSV format)</span>
             <span className="muted">›</span>
           </button>
-          <button className="start-row" onClick={() => exportTo("bodyweight", "liftbook-bodyweight", "csv")}>
+          <button className="start-row" onClick={() => exportTo("bodyweight", "fitledger-bodyweight", "csv")}>
             <span>Bodyweight CSV</span>
             <span className="muted">›</span>
           </button>
-          <button className="start-row" onClick={() => exportTo("inbody", "liftbook-body-composition", "csv")}>
+          <button className="start-row" onClick={() => exportTo("inbody", "fitledger-body-composition", "csv")}>
             <span>Body composition (InBody) CSV</span>
             <span className="muted">›</span>
           </button>
-          <button className="start-row" onClick={() => exportTo("diet", "liftbook-diet", "csv")}>
+          <button className="start-row" onClick={() => exportTo("diet", "fitledger-diet", "csv")}>
             <span>Diet CSV</span>
             <span className="muted">›</span>
           </button>
-          <button className="start-row" onClick={() => exportTo("measurements", "liftbook-measurements", "csv")}>
+          <button className="start-row" onClick={() => exportTo("measurements", "fitledger-measurements", "csv")}>
             <span>Body measurements CSV</span>
             <span className="muted">›</span>
           </button>
-          <button className="start-row" onClick={() => exportTo("json", "liftbook-export", "json")}>
+          <button className="start-row" onClick={() => exportTo("json", "fitledger-export", "json")}>
             <span>Everything (JSON)</span>
             <span className="muted">›</span>
           </button>
@@ -475,7 +475,7 @@ function ExportBackup() {
         {IS_ANDROID && (
           <label className="check small muted">
             <input type="checkbox" checked={shareExports} onChange={(e) => setShareExports(e.target.checked)} />
-            Open the share sheet instead of saving to Downloads/Liftbook
+            Open the share sheet instead of saving to Downloads/FitLedger
           </label>
         )}
       </section>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { usePrefs, type Theme } from "../App";
 import { api, type WeightUnit } from "../api";
+import { WearablesCard } from "../components/WearablesCard";
 import { IS_ANDROID } from "../platform";
 import { loadWeighInPlan, saveWeighInPlan, type WeighInPlan } from "../weighIn";
 
@@ -101,6 +102,7 @@ export default function SettingsPage() {
         </div>
       </section>
       <WeighInDays />
+      <WearablesCard />
       <section className="card">
         <h2 className="section-title">Weight unit</h2>
         {seg<WeightUnit>(
@@ -179,7 +181,7 @@ export default function SettingsPage() {
       </section>
       <section className="card">
         <h2 className="section-title">About</h2>
-        <p className="small">Liftbook keeps everything on this device. No account, no server.</p>
+        <p className="small">FitLedger keeps everything on this device. No account, no server.</p>
         <p className="small muted">
           The exercise library includes exercises from{" "}
           <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noreferrer">

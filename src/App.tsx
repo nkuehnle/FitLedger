@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import { autoSyncHealthConnect } from "./components/WearablesCard";
 import { api, type WeightUnit } from "./api";
 import BodyPage from "./pages/BodyPage";
 import DataPage from "./pages/DataPage";
@@ -89,7 +90,12 @@ export default function App() {
     loadWeighInPlan().then(syncWeighInReminder);
     // Weekly automatic backup, a few seconds after start so it doesn't slow the first screen.
     const t = setTimeout(() => api.autoBackup(false).catch(() => {}), 5000);
-    return () => clearTimeout(t);
+    // New data from the watch (Health Connect), once connected.
+    const t2 = setTimeout(() => autoSyncHealthConnect().catch(() => {}), 3000);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(t2);
+    };
   }, []);
   useEffect(() => {
     api.activeWorkout().then(setActive);
@@ -168,7 +174,7 @@ export default function App() {
     <PrefsContext.Provider value={prefs}>
       <div className="shell">
         <nav className="nav desktop-nav" aria-label="Main">
-          <div className="brand">Liftbook</div>
+          <div className="brand">FitLedger</div>
           {TABS.map((t) => (
             <a key={t} href={`#/${t}`} className={current === t ? "nav-item active" : "nav-item"}>
               <NavIcon d={ICONS[t]} />

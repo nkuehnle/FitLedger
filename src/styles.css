@@ -2009,6 +2009,9 @@ a.start-row {
 .today-card {
   padding: 6px 10px;
 }
+.today-recovery {
+  margin-top: 4px;
+}
 .today-grid {
   display: grid;
   grid-template-columns: 1fr 1fr auto;

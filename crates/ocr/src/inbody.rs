@@ -175,7 +175,7 @@ pub fn read_inbody580(image_bytes: &[u8]) -> Result<InBodyRead, Error> {
 
     let mut values = BTreeMap::new();
     let mut doubtful = Vec::new();
-    let debug = std::env::var_os("LIFTBOOK_OCR_DEBUG").is_some();
+    let debug = std::env::var_os("FITLEDGER_OCR_DEBUG").is_some();
     let mut boxes: BTreeMap<String, (f32, f32, f32, f32)> = BTreeMap::new();
     let parse = |field: &str, text: Option<String>, lo: f64, hi: f64| {
         if debug {

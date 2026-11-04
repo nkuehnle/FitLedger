@@ -415,6 +415,7 @@ function Detail({ id, summary }: { id: number; summary: boolean }) {
           <Stat label="Volume" value={formatVolume(w.volume_kg, unit)} />
           <Stat label="Sets" value={String(sets)} />
           <Stat label="PRs" value={String(w.prs.length)} />
+          {w.avg_hr != null && <Stat label={w.max_hr != null ? "Avg / max HR" : "Avg HR"} value={`${w.avg_hr}${w.max_hr != null ? ` / ${w.max_hr}` : ""} bpm`} />}
         </div>
       </div>
       <div className="row action-row">
