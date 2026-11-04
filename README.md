@@ -1,8 +1,12 @@
 # FitLedger
 
-The last fitness app I'll ever use. A personal tracker for lifting, cardio, bodyweight and body
-composition that runs on your phone (Android) and desktop (Linux, Windows). No account, no server,
-no subscription: your data stays on your device.
+**The fitness app you control.** Track lifting, cardio, bodyweight and body composition on your
+phone (Android) and desktop (Linux, Windows).
+
+- **Your data stays yours:** no account, no server, no subscription. Everything lives on your
+  device, and you can export all of it at any time (Strong-format CSV, JSON, full backups).
+- **Open code:** every line is in this repository, free to use, change and share for any
+  non-commercial purpose ([license](#license)). Nothing is hidden, and nothing phones home.
 
 <p>
   <img src="docs/screenshots/workouts.png" width="270" alt="Workouts: today's suggestion and recent workouts">
