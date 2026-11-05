@@ -60,6 +60,8 @@ from **Settings → Import, export & backup → Restore…**.
 
 - **Per-exercise charts:** estimated 1RM, heaviest weight, volume and reps, with PR markers,
   rep maxes and PR history.
+- **Strength tiers** for squat, bench and deadlift (Beginner to Elite, plus a percentile) against
+  raw, drug-tested powerlifting competitors of your sex, age and bodyweight.
 - **Body map heat map** of the muscles you trained, colored against weekly set targets, plus a
   muscle-by-week grid and a recovery view.
 - **Training calendar**, streaks, workout duration and weekly minutes of cardio.
@@ -69,10 +71,15 @@ from **Settings → Import, export & backup → Restore…**.
 
 - **Bodyweight** with a 7-day average, change per week, a goal (cut, maintain or gain) with a
   weekly target, and weigh-in reminders on the days you choose.
-- **Body parts:** log any measurement (waist, neck, arms, …) and chart it.
+- **Body parts:** log any measurement (waist, neck, arms, …) and chart it. Readings taken after a
+  workout the same day are charted as "pumped", separately from rested ones, and once you have a
+  few of each, your own pump size fills in estimates for both lines.
 - **Body composition:** InBody scans by hand, from a CSV, or **read straight from a photo of an
   InBody 580 result sheet** with on-device OCR. Body fat, lean mass and fat mass are charted
   alongside US Navy and relative-fat-mass tape estimates.
+- **How you compare:** percentiles against people of your sex and age for body fat, fat mass and
+  lean mass indexes (US body-scan reference data, the same kind InBody shows), weight, BMI, waist
+  and upper arm. Each shows a strip with where you started and where you are now.
 - **Calories and protein (optional):** energy balance from your weight trend and an adaptive
   TDEE estimate.
 
@@ -119,5 +126,11 @@ permission from the author.
 InBody sheet reading uses the [Ocrs](https://github.com/robertknight/ocrs) engine. Its models
 are trained on Google Research's HierText dataset and licensed CC BY-SA 4.0 (see
 [crates/ocr/models/README.md](crates/ocr/models/README.md)).
+
+Comparison data: body composition from Kelly, Wilson & Heymsfield (2009), "Dual Energy X-Ray
+Absorptiometry Body Composition Reference Values from NHANES", PLoS ONE 4(9): e7038 (CC BY);
+weight, BMI, waist and arm from the CDC's Anthropometric Reference Data, NHANES 2015–2018 (public
+domain); strength from the [OpenPowerlifting](https://www.openpowerlifting.org) project (public
+domain).
 
 For building, testing and releasing, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).

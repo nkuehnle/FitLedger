@@ -9,6 +9,7 @@ import { ShareButton } from "../share/ShareDialog";
 import { EQUIPMENT_LABELS, formatDate, formatVolume, formatWeight, parseLocal, toUnit } from "../format";
 import { prText } from "./HistoryPage";
 import { ProgressHeader } from "../components/ProgressHeader";
+import { ProfileHint, Standing, useNormProfile } from "../components/Standing";
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -109,6 +110,14 @@ function Library({ selectedId }: { selectedId: number | null }) {
 
 type Metric = "e1rm" | "weight" | "volume" | "reps";
 
+/** Barbell lifts with competition reference data (OpenPowerlifting). */
+const COMPETITION_LIFT: Record<string, string> = {
+  "squat-barbell": "squat",
+  "bench-press-barbell": "bench",
+  "deadlift-barbell": "deadlift",
+  "sumo-deadlift-barbell": "deadlift",
+};
+
 function ExerciseDetail({ id }: { id: number }) {
   const { unit } = usePrefs();
   const [info, setInfo] = useState<ExerciseInfo | null>(null);
@@ -137,7 +146,12 @@ function ExerciseDetail({ id }: { id: number }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  const latestKg = weights.length ? weights[weights.length - 1].weight_kg : null;
+  const { who, loaded } = useNormProfile(latestKg);
+
   if (!info || !stats) return <p className="muted">Loading…</p>;
+  const lift = COMPETITION_LIFT[info.slug];
+  const firstE1rm = stats.sessions.find((x) => x.best_e1rm)?.best_e1rm;
   const name = (m: string) => muscles.find((x) => x.id === m)?.name ?? m;
   const sessions = stats.sessions.filter((s) => inRange(s.at, range));
   const bodyweightKind = info.kind === "bodyweight_reps" || info.kind === "assisted_bodyweight";
@@ -259,6 +273,28 @@ function ExerciseDetail({ id }: { id: number }) {
               )}
               <Record label="Sessions" value={String(stats.sessions.length)} sub={`total ${formatVolume(stats.total_volume_kg, unit)}`} />
             </div>
+          )}
+          {tab === "records" && lift && stats.best_e1rm && loaded && (
+            <section className="card">
+              <h2 className="section-title">How you compare</h2>
+              {who && latestKg ? (
+                <Standing
+                  metric={lift}
+                  label="Best est. 1RM"
+                  values={firstE1rm && firstE1rm !== stats.best_e1rm.value ? [firstE1rm, stats.best_e1rm.value] : [stats.best_e1rm.value]}
+                  who={who}
+                  show={(kg) => `${Math.round(toUnit(kg, unit))} ${unit}`}
+                  note={`At your latest bodyweight (${Math.round(toUnit(latestKg, unit))} ${unit}). Competition lifts are true 1RMs with strict depth and pauses; yours is estimated from your sets.`}
+                />
+              ) : who ? (
+                <p className="muted small">Log your bodyweight to compare.</p>
+              ) : (
+                <ProfileHint />
+              )}
+              <p className="muted small">
+                Against raw, drug-tested powerlifting competitors of your sex, age and bodyweight, not the general public.
+              </p>
+            </section>
           )}
           {tab === "records" && (
             <div className="record-grid">

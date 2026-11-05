@@ -96,6 +96,24 @@ measured within two weeks) and relative fat mass (height and waist). At each est
 the nearest weigh-in gives lean mass (weight × (1 − body fat)), fat mass and skeletal muscle (lean
 × the muscle share of lean mass on your InBody scans, else 0.56).
 
+**Percentiles and strength tiers** (`crates/core/src/norms.rs`, `src/components/Standing.tsx`).
+The tables in `data/norms/` (about 45 KB) are built by `scripts/build_norms.py` from the original
+sources, which aren't kept in git (the script's header says where to get them):
+
+- `body_composition.json`: Kelly et al. 2009 NHANES DXA LMS curves (L, M, S at ages 20–85 every 5
+  years, by sex and group) for % fat, fat mass/height², lean mass/height² and arm + leg
+  lean/height². Percentile = Φ(((x/M)^L − 1)/(L·S)). Without a group, the three groups' percentiles
+  are averaged. DXA "lean" excludes bone, so the lean index uses InBody fat-free mass less 4.5 %.
+- `body_size.json`: CDC 2015–2018 percentiles (5th–95th) by 10-year age band for weight, BMI, waist
+  and mid-upper arm; linear between points.
+- `strength.json`: OpenPowerlifting, raw and drug-tested, no DQs, ages 18+; each lifter's best per
+  lift and age band (18–39, 40s, 50s, 60s, 70+), in 10 kg bodyweight bins with at least 100
+  lifters, blended between the two nearest bins. Tiers: Novice from half the median, Intermediate
+  from the 10th percentile, Advanced from the median, Elite from the 90th.
+
+Age comes from the birth year and the profile (sex, height, birth year, group) is set on Measure →
+Body comp.
+
 ## Demo data and screenshots
 
 ```sh

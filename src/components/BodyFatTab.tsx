@@ -4,6 +4,7 @@ import { usePrefs } from "../App";
 import { TimeSeriesChart, type Series } from "../charts/TimeSeriesChart";
 import { bodyFatSeries, type Pt, type Sex } from "../bodyfat";
 import { toUnit } from "../format";
+import { Standing, whoOf } from "./Standing";
 
 const CM_PER_IN = 2.54;
 const signed = (v: number, digits = 1) => `${v > 0 ? "+" : v < 0 ? "−" : "±"}${Math.abs(v).toFixed(digits)}`;
@@ -18,11 +19,15 @@ export function BodyFatTab() {
   const [sex, setSex] = useState<Sex | null>(null);
   const [heightCm, setHeightCm] = useState<number | null>(null);
   const [heightText, setHeightText] = useState("");
+  const [birthYear, setBirthYear] = useState("");
+  const [group, setGroup] = useState("");
   const inches = unit === "lb";
 
   useEffect(() => {
     Promise.all([api.measurements(), api.inbodyScans(), api.weighIns(true)]).then(([m, scans, w]) => setData({ m, scans, w }));
     api.getSetting("sex").then((s) => setSex(s === "male" || s === "female" ? s : null));
+    api.getSetting("birth_year").then((y) => setBirthYear(y ?? ""));
+    api.getSetting("norm_group").then((g) => setGroup(g ?? ""));
     api.getSetting("height_cm").then((h) => {
       const v = h ? Number(h) : null;
       setHeightCm(v);
@@ -44,6 +49,14 @@ export function BodyFatTab() {
   const saveSex = (v: Sex) => {
     setSex(v);
     api.setSetting("sex", v);
+  };
+  const saveBirthYear = (text: string) => {
+    setBirthYear(text);
+    if (/^(19|20)\d\d$/.test(text)) api.setSetting("birth_year", text);
+  };
+  const saveGroup = (g: string) => {
+    setGroup(g);
+    api.setSetting("norm_group", g);
   };
 
   const fat: Series[] = [
@@ -84,12 +97,14 @@ export function BodyFatTab() {
       <span className="muted">—</span>
     );
   const needsProfile = !sex || !heightCm;
+  const who = whoOf(sex, /^(19|20)\d\d$/.test(birthYear) ? birthYear : null, group, null);
+  const compare = who && heightCm ? comparisons(data!.scans, s, heightCm) : [];
 
   return (
     <>
       <section className="card">
         <div className="row">
-          <span className="small muted">For tape estimates:</span>
+          <span className="small muted">Your profile:</span>
           <div className="segmented">
             {(["male", "female"] as Sex[]).map((v) => (
               <button key={v} className={sex === v ? "active" : ""} onClick={() => saveSex(v)}>
@@ -102,10 +117,30 @@ export function BodyFatTab() {
             <input className="input small-input" inputMode="decimal" value={heightText} onChange={(e) => saveHeight(e.target.value)} />
             {inches ? "in" : "cm"}
           </label>
+          <label className="row small">
+            Born
+            <input
+              className="input small-input"
+              inputMode="numeric"
+              placeholder="year"
+              value={birthYear}
+              onChange={(e) => saveBirthYear(e.target.value.trim())}
+            />
+          </label>
+          <label className="row small">
+            Compare with
+            <select className="input" value={group} onChange={(e) => saveGroup(e.target.value)}>
+              <option value="">All US adults</option>
+              <option value="white">White</option>
+              <option value="black">Black</option>
+              <option value="mexican_american">Mexican American</option>
+            </select>
+          </label>
         </div>
         <p className="muted small">
-          Navy uses waist and neck{sex === "female" ? " and hips" : ""} measured within two weeks of each other; RFM uses waist
-          only. Both are estimates, typically within ±3–4 % of a scan.
+          Navy uses waist and neck{sex === "female" ? " and hips" : ""} measured within two weeks of each other; RFM uses waist only. Both
+          are estimates, typically within ±3–4 % of a scan. Birth year enables the percentile comparisons; the reference data has curves for
+          these three groups only, and the default averages them.
         </p>
       </section>
       <section className="card">
@@ -120,6 +155,21 @@ export function BodyFatTab() {
           </p>
         )}
       </section>
+      {compare.length > 0 && who && (
+        <section className="card">
+          <h2 className="section-title">How you compare</h2>
+          {compare.map((c) => (
+            <Standing key={c.metric} {...c} who={who} />
+          ))}
+          <p className="muted small">
+            Against US adults of your sex and age, measured by DXA scan. InBody and tape estimates read differently from DXA (often a few
+            points lower body fat), so treat these as a rough guide.
+          </p>
+        </section>
+      )}
+      {!who && (s.measured.length > 0 || s.navy.length > 0) && (
+        <p className="muted small">Set sex, height and birth year above to see how you compare with other adults.</p>
+      )}
       {rows.length > 0 && (
         <section className="card">
           <h2 className="section-title">Muscle and fat</h2>
@@ -165,4 +215,61 @@ export function BodyFatTab() {
       </p>
     </>
   );
+}
+
+/** Bone mineral as a share of fat-free mass in adults (DXA): roughly 4.5 %. */
+const BONE_SHARE = 0.045;
+
+/**
+ * Index comparisons from InBody scans (or tape estimates for body fat), oldest and latest, in the
+ * units of the reference data: % fat, and kg/m² of fat mass, lean soft tissue (DXA "lean", which
+ * excludes bone) and arm + leg lean.
+ */
+function comparisons(scans: InBodyScan[], s: ReturnType<typeof bodyFatSeries>, heightCm: number) {
+  const h2 = (heightCm / 100) ** 2;
+  const ends = (xs: number[]) => (xs.length > 1 ? [xs[0], xs[xs.length - 1]] : xs);
+  const sorted = [...scans].sort((a, b) => a.measured_at_local.localeCompare(b.measured_at_local));
+  const fromScans = (f: (v: Record<string, number>) => number | null) =>
+    ends(sorted.map((x) => f(x.values)).filter((v): v is number => v != null && v > 0));
+  const index = (v: number) => `${v.toFixed(1)} kg/m²`;
+  const pbf = s.measured.length ? s.measured : s.navy;
+  const fatMass = s.fatMeasured.length ? s.fatMeasured : s.fatEstimated;
+  const out = [
+    {
+      metric: "pbf",
+      label: "Body fat",
+      values: ends(pbf.map((p) => p.v)),
+      show: (v: number) => `${v.toFixed(1)} %`,
+      note: s.measured.length ? "From your InBody scans." : "From your Navy tape estimates.",
+    },
+    {
+      metric: "fmi",
+      label: "Fat mass index",
+      values: ends(fatMass.map((p) => p.v / h2)),
+      show: index,
+      note: "Fat mass ÷ height².",
+    },
+    {
+      metric: "lmi",
+      label: "Lean mass index",
+      values: fromScans((v) => {
+        // Fat-free mass, unambiguous; "lean body mass" columns are fat-free mass on some exports and soft lean on others.
+        const ffm = v.fat_free_mass_kg ?? v.lean_body_mass_kg;
+        return ffm ? (ffm * (1 - BONE_SHARE)) / h2 : null;
+      }),
+      show: index,
+      note: "Lean mass without bone ÷ height², to match DXA: your InBody fat-free mass less about 4.5 % for bone.",
+    },
+    {
+      metric: "almi",
+      label: "Arm and leg lean index",
+      values: fromScans((v) => {
+        const parts = ["lean_right_arm_kg", "lean_left_arm_kg", "lean_right_leg_kg", "lean_left_leg_kg"].map((k) => v[k]);
+        return parts.every((x) => x > 0) ? parts.reduce((a, b) => a + b, 0) / h2 : null;
+      }),
+      show: index,
+      note: "Lean mass of both arms and legs ÷ height², the usual measure of muscle on the limbs.",
+    },
+  ];
+  return out.filter((c) => c.values.length > 0);
 }

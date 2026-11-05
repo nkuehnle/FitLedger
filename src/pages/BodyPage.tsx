@@ -17,14 +17,16 @@ import {
 } from "../api";
 import { usePrefs } from "../App";
 import { RangePicker, inRange, today, useSavedRange } from "../charts/RangePicker";
-import { TimeSeriesChart, type Band, type Point } from "../charts/TimeSeriesChart";
+import { TimeSeriesChart, type Band, type Point, type Series } from "../charts/TimeSeriesChart";
 import { useChartTheme } from "../charts/theme";
 import { BodyFatTab } from "../components/BodyFatTab";
 import { Modal } from "../components/Modal";
+import { ProfileHint, Standing, useNormProfile } from "../components/Standing";
 import { ShareButton } from "../share/ShareDialog";
 import { formatDate, formatTime, nowLocal, parseLocal, toUnit } from "../format";
 import { GOAL_TEXT, goalStatus, type GoalInfo } from "../goal";
 import { fileToBase64 } from "../platform";
+import { isPumped, pumpRatio } from "../pump";
 
 const KG_PER_LB = 0.45359237;
 type Tab = "weight" | "inbody" | "diet" | "parts";
@@ -217,14 +219,18 @@ function BodyPartsTab({ part }: { part?: string }) {
   const [rows, setRows] = useState<MeasurementRow[]>([]);
   const [entry, setEntry] = useState("");
   const [editing, setEditing] = useState<MeasurementRow | null>(null);
+  const [workouts, setWorkouts] = useState<string[]>([]);
   const load = () => api.measurements().then(setRows);
   useEffect(() => {
     api.bodyParts().then(setParts);
+    api.workoutStarts().then(setWorkouts);
     load();
   }, []);
   const show = (p: BodyPart, v: number) =>
     p.unit === "pct" ? `${v.toFixed(1)}%` : inches ? `${(v / 2.54).toFixed(1)} in` : `${v.toFixed(1)} cm`;
   const sel = parts.find((p) => p.id === part);
+  const { who, loaded } = useNormProfile();
+  const theme = useChartTheme();
 
   if (!sel)
     return (
@@ -245,6 +251,42 @@ function BodyPartsTab({ part }: { part?: string }) {
   const mine = rows.filter((r) => r.part === sel.id);
   const toDisplay = (v: number) => (sel.unit === "cm" && inches ? v / 2.54 : v);
   const unitLabel = sel.unit === "pct" ? "%" : inches ? "in" : "cm";
+  // Tape measurements taken after a workout the same day are "pumped"; charted separately.
+  const pumped = (r: MeasurementRow) => sel.unit === "cm" && isPumped(r.at, workouts);
+  const point = (r: MeasurementRow) => ({ t: parseLocal(r.at), v: toDisplay(r.value) });
+  const rested = mine.filter((r) => !pumped(r));
+  const pumpedRows = mine.filter(pumped);
+  // With enough pairs, your own pump ratio fills in each line's missing days as estimates (diamonds).
+  const pump = pumpRatio(rested.map(point), pumpedRows.map(point));
+  const [restColor, pumpColor] = [theme.line, theme.categorical[0]];
+  const partSeries: Series[] = pumpedRows.length
+    ? [
+        { id: "rested", label: "Not pumped", points: rested.map(point), color: restColor },
+        { id: "pumped", label: "Pumped (after a workout that day)", points: pumpedRows.map(point), color: pumpColor },
+        ...(pump
+          ? [
+              {
+                id: "rested-est",
+                label: "Not pumped (estimate)",
+                points: pumpedRows.map(point).map((p) => ({ t: p.t, v: p.v / pump.ratio })),
+                color: restColor,
+                style: "points" as const,
+              },
+              {
+                id: "pumped-est",
+                label: "Pumped (estimate)",
+                points: rested.map(point).map((p) => ({ t: p.t, v: p.v * pump.ratio })),
+                color: pumpColor,
+                style: "points" as const,
+              },
+            ]
+          : []),
+      ].filter((x) => x.points.length)
+    : [{ id: sel.id, label: sel.label, points: mine.map(point) }];
+  // Parts with reference data (CDC): waist, and the upper arm (measured relaxed there).
+  const norm = sel.id === "waist" ? "waist_cm" : sel.id === "left_bicep" || sel.id === "right_bicep" ? "arm_cm" : null;
+  const normRows = rested.length ? rested : mine;
+  const normValues = normRows.length > 1 ? [normRows[0].value, normRows[normRows.length - 1].value] : normRows.map((r) => r.value);
   async function add() {
     const v = Number(entry);
     if (!v) return;
@@ -273,19 +315,45 @@ function BodyPartsTab({ part }: { part?: string }) {
           </button>
         </div>
         {mine.length > 1 && (
-          <TimeSeriesChart
-            series={[{ id: sel.id, label: sel.label, points: mine.map((r) => ({ t: parseLocal(r.at), v: toDisplay(r.value) })) }]}
-            unit={unitLabel}
-            height={200}
-          />
+          <TimeSeriesChart series={partSeries} unit={unitLabel} height={200} />
+        )}
+        {pumpedRows.length > 0 && (
+          <p className="muted small">
+            {pump
+              ? `Your pump: ${pump.ratio >= 1 ? "+" : "−"}${Math.abs((pump.ratio - 1) * 100).toFixed(1)} % on average (${pump.pairs} pumped readings with a rested one within a week). Diamonds are estimates from that.`
+              : "Pumped means measured after a workout the same day. With 3 or more pumped readings that have a rested one within a week, the chart estimates each from the other."}
+          </p>
         )}
       </section>
+      {norm && normValues.length > 0 && loaded && (
+        <section className="card">
+          <h2 className="section-title">How you compare</h2>
+          {who ? (
+            <Standing
+              metric={norm}
+              label={sel.label}
+              values={normValues}
+              who={who}
+              show={(cm) => (inches ? `${(cm / 2.54).toFixed(1)} in` : `${cm.toFixed(1)} cm`)}
+              note={
+                norm === "waist_cm"
+                  ? "The survey measures the waist at the top of the hip bone."
+                  : "The survey measures the relaxed upper arm, midway between shoulder and elbow; a flexed measurement reads higher."
+              }
+            />
+          ) : (
+            <ProfileHint />
+          )}
+          <p className="muted small">Against US adults of your sex and age group (CDC, 2015–2018).</p>
+        </section>
+      )}
       <section className="card">
         {mine.length === 0 && <p className="muted small">No measurements yet.</p>}
         {[...mine].reverse().map((r) => (
           <button key={r.id} className="start-row" onClick={() => setEditing(r)}>
             <span>
               {formatDate(r.at)} <span className="muted small">{formatTime(r.at)}</span>
+              {pumped(r) && <span className="chip small-chip">pumped</span>}
             </span>
             <strong>{show(sel, r.value)}</strong>
           </button>
@@ -345,6 +413,9 @@ function BodyweightTab() {
   const last = regular[regular.length - 1];
   const change = first && last ? last.weight_kg - first.weight_kg : null;
   const weeks = first && last ? Math.max(1, (parseLocal(last.at).getTime() - parseLocal(first.at).getTime()) / (7 * 86400000)) : 1;
+  const { who, heightCm, loaded } = useNormProfile();
+  // First weigh-in in the range and the latest (7-day average when there is one).
+  const compareKg = first && last ? (first === last ? [last.weight_kg] : [first.weight_kg, avg7 ?? last.weight_kg]) : [];
 
   async function add() {
     const v = Number(entry);
@@ -409,6 +480,35 @@ function BodyweightTab() {
           share={false}
         />
       </section>
+      {compareKg.length > 0 && loaded && (
+        <section className="card">
+          <h2 className="section-title">How you compare</h2>
+          {who ? (
+            <>
+              <Standing
+                metric="weight_kg"
+                label="Weight"
+                values={compareKg}
+                who={who}
+                show={(kg) => `${toUnit(kg, unit).toFixed(0)} ${unit}`}
+              />
+              {heightCm && (
+                <Standing
+                  metric="bmi"
+                  label="BMI"
+                  values={compareKg.map((kg) => kg / (heightCm / 100) ** 2)}
+                  who={who}
+                  show={(v) => v.toFixed(1)}
+                  note="BMI can't tell muscle from fat; the body comp comparisons can."
+                />
+              )}
+              <p className="muted small">Against US adults of your sex and age group (CDC, 2015–2018).</p>
+            </>
+          ) : (
+            <ProfileHint />
+          )}
+        </section>
+      )}
       <WeighInList rows={rows} unit={unit} onChanged={load} />
     </>
   );

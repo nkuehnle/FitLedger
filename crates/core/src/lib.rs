@@ -8,6 +8,7 @@ pub mod history;
 pub mod library;
 pub mod live;
 pub mod matcher;
+pub mod norms;
 pub mod planning;
 pub mod review;
 pub mod stats;

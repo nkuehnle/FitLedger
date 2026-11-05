@@ -189,6 +189,13 @@ impl Db {
         Ok(out)
     }
 
+    /// Start times of every workout (including one in progress), oldest first.
+    pub fn workout_starts(&self) -> Result<Vec<String>> {
+        let mut stmt = self.conn().prepare_cached("SELECT started_at_local FROM workout ORDER BY started_at_local")?;
+        let rows = stmt.query_map([], |r| r.get(0))?.collect::<rusqlite::Result<_>>()?;
+        Ok(rows)
+    }
+
     /// Newest-first page of workout cards. Pass the last card's `(started_at_local, id)` as
     /// `before` to get the next page.
     pub fn history_page(&self, before: Option<(&str, i64)>, limit: usize) -> Result<Vec<WorkoutCard>> {

@@ -219,6 +219,11 @@ fn set_session_load_mode(state: State<AppState>, workout_exercise_id: i64, mode:
 // ---- History ------------------------------------------------------------------------------------
 
 #[tauri::command]
+fn workout_starts(state: State<AppState>) -> CmdResult<Vec<String>> {
+    with(&state, |db| db.workout_starts())
+}
+
+#[tauri::command]
 fn history_page(state: State<AppState>, before_time: Option<String>, before_id: Option<i64>, limit: usize) -> CmdResult<Vec<WorkoutCard>> {
     with(&state, |db| db.history_page(before_time.as_deref().zip(before_id), limit))
 }
@@ -628,6 +633,12 @@ fn inbody_fields() -> Vec<InBodyField> {
 #[tauri::command]
 fn inbody_scans(state: State<AppState>) -> CmdResult<Vec<InBodyScan>> {
     with(&state, |db| db.inbody_scans())
+}
+
+/// Percentile reference for a measure (see `fitledger_core::norms`); `None` when there's no data.
+#[tauri::command]
+fn norm_reference(metric: String, who: fitledger_core::norms::Who, values: Vec<f64>) -> Option<fitledger_core::norms::Reference> {
+    fitledger_core::norms::reference(&metric, &who, &values)
 }
 
 #[tauri::command]
@@ -1239,7 +1250,7 @@ pub fn run() {
             preview_strong_workouts, import_strong_workouts, preview_bodyweight, import_bodyweight, preview_measurements, import_measurements,
             name_review, set_name_mapping, remove_name_mapping, confirm_name_mapping, search_exercises,
             per_hand_suspects, set_session_load_mode,
-            history_page, workout_detail, delete_workout, update_workout, rebuild_prs,
+            history_page, workout_starts, workout_detail, delete_workout, update_workout, rebuild_prs,
             active_workout, start_workout, add_exercise, remove_exercise, swap_exercise, reorder_exercises,
             add_set, add_warmup_set, set_sticky_note, remove_set, update_set, update_workout_exercise, set_rest_timer, finish_workout,
             previous_for_workout, update_template_from_workout, similar_exercises,
@@ -1248,7 +1259,7 @@ pub fn run() {
             list_templates, save_template, archive_template, template_from_workout, active_schedule, save_schedule,
             suggestion, projected_weekly_sets, muscle_targets, set_muscle_target, current_goal, set_goal, goal_history, progress_health, list_phases, save_phase, delete_phase,
             propose_from_history, apply_history_proposal, programs, install_program,
-            weigh_ins, add_weigh_in, update_weigh_in, update_measurement, delete_weigh_in, inbody_fields, inbody_scans, save_inbody_scan, delete_inbody_scan,
+            weigh_ins, add_weigh_in, update_weigh_in, update_measurement, delete_weigh_in, inbody_fields, inbody_scans, save_inbody_scan, delete_inbody_scan, norm_reference,
             preview_inbody_csv, import_inbody_csv, diet_days, save_diet_day, energy_balance,
             body_parts, measurements, add_measurement, delete_measurement,
             export_file, backup_to, inspect_backup, restore_from, db_info, save_base64, copy_png,

@@ -600,6 +600,25 @@ export interface BackupInfo {
 /** Error code returned when a file has no unit information. */
 export const MISSING_WEIGHT_UNIT = "MISSING_WEIGHT_UNIT";
 
+/** Who a measurement is compared with (see crates/core/src/norms.rs). */
+export interface NormWho {
+  sex: "male" | "female";
+  age: number;
+  group: string | null;
+  bodyweight_kg: number | null;
+}
+
+export interface NormReference {
+  /** [percentile, value] points, ascending. */
+  points: [number, number][];
+  ranks: (number | null)[];
+  /** [name, lowest value], ascending; lifts only. */
+  tiers: [string, number][];
+  tier_of: (number | null)[];
+  population: string;
+  source: string;
+}
+
 export const api = {
   previewStrongWorkouts: (text: string, weightUnit?: WeightUnit) => invoke<WorkoutPreview>("preview_strong_workouts", { text, weightUnit }),
   importStrongWorkouts: (text: string, fileName: string, weightUnit?: WeightUnit) =>
@@ -617,6 +636,8 @@ export const api = {
   searchExercises: (query: string) => invoke<SuggestionView[]>("search_exercises", { query }),
   historyPage: (limit: number, before?: { time: string; id: number }) =>
     invoke<WorkoutCard[]>("history_page", { limit, beforeTime: before?.time, beforeId: before?.id }),
+  /** Start time of every workout, oldest first. */
+  workoutStarts: () => invoke<string[]>("workout_starts"),
   workoutDetail: (id: number) => invoke<WorkoutDetail | null>("workout_detail", { id }),
   counts: () => invoke<Counts>("counts"),
   getSetting: (key: string) => invoke<string | null>("get_setting", { key }),
@@ -718,6 +739,8 @@ export const api = {
   updateMeasurement: (id: number, at: string, value: number) => invoke<void>("update_measurement", { id, at, value }),
   inbodyFields: () => invoke<InBodyField[]>("inbody_fields"),
   inbodyScans: () => invoke<InBodyScan[]>("inbody_scans"),
+  normReference: (metric: string, who: NormWho, values: number[]) =>
+    invoke<NormReference | null>("norm_reference", { metric, who, values }),
   /** On-device OCR of an InBody 580 result sheet image (base64); values in storage units. */
   readInbodyImage: (data: string, massUnit: "kg" | "lb") =>
     invoke<{ measured_at: string | null; values: Record<string, number>; doubtful: string[]; mass_unit: "kg" | "lb" | null }>(
