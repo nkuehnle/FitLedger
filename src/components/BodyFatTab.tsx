@@ -20,14 +20,12 @@ export function BodyFatTab() {
   const [heightCm, setHeightCm] = useState<number | null>(null);
   const [heightText, setHeightText] = useState("");
   const [birthYear, setBirthYear] = useState("");
-  const [group, setGroup] = useState("");
   const inches = unit === "lb";
 
   useEffect(() => {
     Promise.all([api.measurements(), api.inbodyScans(), api.weighIns(true)]).then(([m, scans, w]) => setData({ m, scans, w }));
     api.getSetting("sex").then((s) => setSex(s === "male" || s === "female" ? s : null));
     api.getSetting("birth_year").then((y) => setBirthYear(y ?? ""));
-    api.getSetting("norm_group").then((g) => setGroup(g ?? ""));
     api.getSetting("height_cm").then((h) => {
       const v = h ? Number(h) : null;
       setHeightCm(v);
@@ -53,10 +51,6 @@ export function BodyFatTab() {
   const saveBirthYear = (text: string) => {
     setBirthYear(text);
     if (/^(19|20)\d\d$/.test(text)) api.setSetting("birth_year", text);
-  };
-  const saveGroup = (g: string) => {
-    setGroup(g);
-    api.setSetting("norm_group", g);
   };
 
   const fat: Series[] = [
@@ -97,7 +91,7 @@ export function BodyFatTab() {
       <span className="muted">—</span>
     );
   const needsProfile = !sex || !heightCm;
-  const who = whoOf(sex, /^(19|20)\d\d$/.test(birthYear) ? birthYear : null, group, null);
+  const who = whoOf(sex, /^(19|20)\d\d$/.test(birthYear) ? birthYear : null, null);
   const compare = who && heightCm ? comparisons(data!.scans, s, heightCm) : [];
 
   return (
@@ -127,20 +121,10 @@ export function BodyFatTab() {
               onChange={(e) => saveBirthYear(e.target.value.trim())}
             />
           </label>
-          <label className="row small">
-            Compare with
-            <select className="input" value={group} onChange={(e) => saveGroup(e.target.value)}>
-              <option value="">All US adults</option>
-              <option value="white">White</option>
-              <option value="black">Black</option>
-              <option value="mexican_american">Mexican American</option>
-            </select>
-          </label>
         </div>
         <p className="muted small">
-          Navy uses waist and neck{sex === "female" ? " and hips" : ""} measured within two weeks of each other; RFM uses waist only. Both
-          are estimates, typically within ±3–4 % of a scan. Birth year enables the percentile comparisons; the reference data has curves for
-          these three groups only, and the default averages them.
+          Navy uses waist and neck{sex === "female" ? " and hips" : ""} measured within two weeks of each other; RFM uses waist
+          only. Both are estimates, typically within ±3–4 % of a scan. Birth year enables the percentile comparisons.
         </p>
       </section>
       <section className="card">

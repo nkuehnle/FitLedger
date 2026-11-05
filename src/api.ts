@@ -604,7 +604,6 @@ export const MISSING_WEIGHT_UNIT = "MISSING_WEIGHT_UNIT";
 export interface NormWho {
   sex: "male" | "female";
   age: number;
-  group: string | null;
   bodyweight_kg: number | null;
 }
 

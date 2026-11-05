@@ -5,11 +5,11 @@ import { api, type NormReference, type NormWho } from "../api";
 export function useNormProfile(bodyweightKg: number | null = null): { who: NormWho | null; heightCm: number | null; loaded: boolean } {
   const [p, setP] = useState<(string | null)[] | null>(null);
   useEffect(() => {
-    Promise.all(["sex", "birth_year", "norm_group", "height_cm"].map((k) => api.getSetting(k))).then(setP);
+    Promise.all(["sex", "birth_year", "height_cm"].map((k) => api.getSetting(k))).then(setP);
   }, []);
   if (!p) return { who: null, heightCm: null, loaded: false };
-  const [sex, birth, group, height] = p;
-  return { who: whoOf(sex, birth, group, bodyweightKg), heightCm: Number(height) || null, loaded: true };
+  const [sex, birth, height] = p;
+  return { who: whoOf(sex, birth, bodyweightKg), heightCm: Number(height) || null, loaded: true };
 }
 
 /** Shown where comparisons would be, when the profile isn't set. */
@@ -21,10 +21,10 @@ export function ProfileHint() {
   );
 }
 
-export function whoOf(sex: string | null, birthYear: string | null, group: string | null, bodyweightKg: number | null): NormWho | null {
+export function whoOf(sex: string | null, birthYear: string | null, bodyweightKg: number | null): NormWho | null {
   const year = Number(birthYear);
   if ((sex !== "male" && sex !== "female") || !year) return null;
-  return { sex, age: new Date().getFullYear() - year, group: group || null, bodyweight_kg: bodyweightKg };
+  return { sex, age: new Date().getFullYear() - year, bodyweight_kg: bodyweightKg };
 }
 
 export const ordinal = (n: number) => {

@@ -313,6 +313,9 @@ CREATE TABLE day_health (
     steps      INTEGER,
     PRIMARY KEY (date, source)
 );
+"#, r#"
+-- Migration 8: the comparisons no longer take a reference group; forget any saved one.
+DELETE FROM setting WHERE key = 'norm_group';
 "#];
 
 pub(crate) const MIGRATION_COUNT: usize = MIGRATIONS.len();

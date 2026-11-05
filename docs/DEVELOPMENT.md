@@ -101,9 +101,9 @@ The tables in `data/norms/` (about 45 KB) are built by `scripts/build_norms.py` 
 sources, which aren't kept in git (the script's header says where to get them):
 
 - `body_composition.json`: Kelly et al. 2009 NHANES DXA LMS curves (L, M, S at ages 20–85 every 5
-  years, by sex and group) for % fat, fat mass/height², lean mass/height² and arm + leg
-  lean/height². Percentile = Φ(((x/M)^L − 1)/(L·S)). Without a group, the three groups' percentiles
-  are averaged. DXA "lean" excludes bone, so the lean index uses InBody fat-free mass less 4.5 %.
+  years, by sex; the study gives separate curves for the three groups it sampled) for % fat, fat
+  mass/height², lean mass/height² and arm + leg lean/height². Percentile = Φ(((x/M)^L − 1)/(L·S)),
+  averaged over the three curves; the app doesn't ask for or store ethnicity. DXA "lean" excludes bone, so the lean index uses InBody fat-free mass less 4.5 %.
 - `body_size.json`: CDC 2015–2018 percentiles (5th–95th) by 10-year age band for weight, BMI, waist
   and mid-upper arm; linear between points.
 - `strength.json`: OpenPowerlifting, raw and drug-tested, no DQs, ages 18+; each lifter's best per
@@ -111,7 +111,7 @@ sources, which aren't kept in git (the script's header says where to get them):
   lifters, blended between the two nearest bins. Tiers: Novice from half the median, Intermediate
   from the 10th percentile, Advanced from the median, Elite from the 90th.
 
-Age comes from the birth year and the profile (sex, height, birth year, group) is set on Measure →
+Age comes from the birth year and the profile (sex, height, birth year) is set on Measure →
 Body comp.
 
 ## Demo data and screenshots

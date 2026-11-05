@@ -24,8 +24,6 @@ pub enum Sex {
 pub struct Who {
     pub sex: Sex,
     pub age: f64,
-    /// Kelly reference group ("white", "black", "mexican_american"); none averages all three.
-    pub group: Option<String>,
     /// Needed for strength.
     pub bodyweight_kg: Option<f64>,
 }
@@ -120,17 +118,11 @@ fn composition(metric: &str, who: &Who, values: &[f64]) -> Option<Reference> {
         Sex::Male => &by_sex.male,
         Sex::Female => &by_sex.female,
     };
-    let groups: Vec<&Vec<[f64; 4]>> = match who.group.as_deref() {
-        Some("white") => vec![&g.white],
-        Some("black") => vec![&g.black],
-        Some("mexican_american") => vec![&g.mexican_american],
-        _ => vec![&g.white, &g.black, &g.mexican_american],
-    };
-    let curves: Vec<_> = groups.iter().map(|rows| lms_at(rows, who.age)).collect();
-    // Without a group: the average percentile over the three groups.
+    // The study publishes separate curves for the three groups it sampled; use the average percentile.
+    let curves: Vec<_> = [&g.white, &g.black, &g.mexican_american].iter().map(|rows| lms_at(rows, who.age)).collect();
     let pct = |x: f64| curves.iter().map(|c| normal_cdf(lms_z(x, *c))).sum::<f64>() / curves.len() as f64 * 100.0;
     let ranks = values.iter().map(|&x| (x > 0.0).then(|| pct(x).clamp(MIN_PCT, MAX_PCT))).collect();
-    // Points: invert the (averaged) percentile by bisection.
+    // Points: invert the averaged percentile by bisection.
     let points = [3.0, 5.0, 10.0, 25.0, 50.0, 75.0, 90.0, 95.0, 97.0]
         .iter()
         .map(|&p| {
@@ -146,18 +138,12 @@ fn composition(metric: &str, who: &Who, values: &[f64]) -> Option<Reference> {
             (p, (lo + hi) / 2.0)
         })
         .collect();
-    let group = match who.group.as_deref() {
-        Some("white") => "white ",
-        Some("black") => "Black ",
-        Some("mexican_american") => "Mexican American ",
-        _ => "",
-    };
     Some(Reference {
         points,
         ranks,
         tiers: vec![],
         tier_of: vec![None; values.len()],
-        population: format!("{group}US {} aged about {:.0}, measured by DXA scan", sex_word(who.sex), who.age.clamp(20.0, 85.0)),
+        population: format!("US {} aged about {:.0}, measured by DXA scan", sex_word(who.sex), who.age.clamp(20.0, 85.0)),
         source: "Kelly, Wilson & Heymsfield 2009, NHANES 1999–2004 (PLoS ONE 4: e7038)".into(),
     })
 }
@@ -343,15 +329,24 @@ fn sex_word(s: Sex) -> &'static str {
 mod tests {
     use super::*;
 
-    fn who(sex: Sex, age: f64, group: Option<&str>) -> Who {
-        Who { sex, age, group: group.map(String::from), bodyweight_kg: Some(85.0) }
+    fn who(sex: Sex, age: f64) -> Who {
+        Who { sex, age, bodyweight_kg: Some(85.0) }
+    }
+
+    fn white_men(metric: &str) -> &'static [[f64; 4]] {
+        let t = composition_tables();
+        let by_sex = match metric {
+            "fmi" => &t.fmi,
+            _ => &t.lmi,
+        };
+        &by_sex.male.white
     }
 
     #[test]
     fn lms_median_is_50th_percentile() {
         // Kelly Table S1, white men aged 20: FMI median 5.95.
-        let r = reference("fmi", &who(Sex::Male, 20.0, Some("white")), &[5.95]).unwrap();
-        assert!((r.ranks[0].unwrap() - 50.0).abs() < 0.01);
+        let c = lms_at(white_men("fmi"), 20.0);
+        assert!((normal_cdf(lms_z(5.95, c)) - 0.5).abs() < 1e-4);
     }
 
     #[test]
@@ -360,40 +355,40 @@ mod tests {
         // above in the Box-Cox scale is z = 1 by construction.
         let (l, m, s): (f64, f64, f64) = (-1.115, 18.98, 2.50 / 18.98);
         let x = m * (1.0 + l * s).powf(1.0 / l);
-        let r = reference("lmi", &who(Sex::Male, 20.0, Some("white")), &[x]).unwrap();
-        assert!((r.ranks[0].unwrap() - 84.13).abs() < 0.05, "{:?}", r.ranks);
+        assert!((normal_cdf(lms_z(x, lms_at(white_men("lmi"), 20.0))) - 0.8413).abs() < 5e-4);
     }
 
     #[test]
     fn lms_interpolates_age() {
-        // Table S2: the median at 22.5 lies between the published medians at 20 and 25.
-        let w = |age| reference("pbf", &who(Sex::Female, age, Some("white")), &[]).unwrap().points[4].1;
-        let (a, b, mid) = (w(20.0), w(25.0), w(22.5));
-        assert!(mid > a.min(b) && mid < a.max(b));
+        // Table S1: the median at 22.5 lies between the published medians at 20 (5.95) and 25 (6.37).
+        let m = lms_at(white_men("fmi"), 22.5).1;
+        assert!((m - (5.95 + 6.37) / 2.0).abs() < 1e-9);
     }
 
     #[test]
-    fn group_average_lies_between_groups() {
-        let one = |g| reference("almi", &who(Sex::Male, 30.0, Some(g)), &[8.5]).unwrap().ranks[0].unwrap();
-        let all = reference("almi", &who(Sex::Male, 30.0, None), &[8.5]).unwrap().ranks[0].unwrap();
-        let rs = [one("white"), one("black"), one("mexican_american")];
-        assert!((all - rs.iter().sum::<f64>() / 3.0).abs() < 1e-9);
+    fn composition_averages_the_three_curves() {
+        let g = &composition_tables().almi.male;
+        let mean = [&g.white, &g.black, &g.mexican_american].iter().map(|rows| normal_cdf(lms_z(8.5, lms_at(rows, 30.0)))).sum::<f64>()
+            / 3.0
+            * 100.0;
+        let r = reference("almi", &who(Sex::Male, 30.0), &[8.5]).unwrap();
+        assert!((r.ranks[0].unwrap() - mean).abs() < 1e-9);
     }
 
     #[test]
     fn cdc_table_points() {
         // Table 5: men 20-29, weight 50th percentile 81.3 kg, 95th 128.1 kg.
-        let r = reference("weight_kg", &who(Sex::Male, 25.0, None), &[81.3, 128.1, 200.0, 40.0]).unwrap();
+        let r = reference("weight_kg", &who(Sex::Male, 25.0), &[81.3, 128.1, 200.0, 40.0]).unwrap();
         assert_eq!(r.ranks, vec![Some(50.0), Some(95.0), Some(95.0), Some(5.0)]);
         // Table 19: women 40-49 waist, 25th 85.9, 50th 96.1: halfway is the 37.5th.
-        let r = reference("waist_cm", &who(Sex::Female, 45.0, None), &[(85.9 + 96.1) / 2.0]).unwrap();
+        let r = reference("waist_cm", &who(Sex::Female, 45.0), &[(85.9 + 96.1) / 2.0]).unwrap();
         assert!((r.ranks[0].unwrap() - 37.5).abs() < 1e-9);
         assert!(r.population.contains("40–49"));
     }
 
     #[test]
     fn strength_tiers_ascend() {
-        let r = reference("squat", &who(Sex::Male, 28.0, None), &[60.0, 150.0, 200.0, 300.0]).unwrap();
+        let r = reference("squat", &who(Sex::Male, 28.0), &[60.0, 150.0, 200.0, 300.0]).unwrap();
         assert_eq!(r.tiers.len(), 5);
         assert!(r.tiers.windows(2).all(|w| w[0].1 < w[1].1));
         let tiers: Vec<_> = r.tier_of.iter().map(|t| TIERS[t.unwrap()]).collect();
@@ -404,7 +399,7 @@ mod tests {
 
     #[test]
     fn strength_needs_bodyweight() {
-        let mut w = who(Sex::Female, 30.0, None);
+        let mut w = who(Sex::Female, 30.0);
         w.bodyweight_kg = None;
         assert!(reference("bench", &w, &[50.0]).is_none());
     }
@@ -414,7 +409,7 @@ mod tests {
         for m in METRICS {
             for sex in [Sex::Male, Sex::Female] {
                 for age in [18.0, 30.0, 55.0, 90.0] {
-                    let r = reference(m, &who(sex, age, None), &[1.0]).unwrap();
+                    let r = reference(m, &who(sex, age), &[1.0]).unwrap();
                     assert!(r.points.windows(2).all(|w| w[0].1 <= w[1].1), "{m} {sex:?} {age}");
                 }
             }
