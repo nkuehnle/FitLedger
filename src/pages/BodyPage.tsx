@@ -262,7 +262,7 @@ function BodyPartsTab({ part }: { part?: string }) {
   const partSeries: Series[] = pumpedRows.length
     ? [
         { id: "rested", label: "Not pumped", points: rested.map(point), color: restColor },
-        { id: "pumped", label: "Pumped (within 2 h of training it)", points: pumpedRows.map(point), color: pumpColor },
+        { id: "pumped", label: "Pumped (within 6 h of training it)", points: pumpedRows.map(point), color: pumpColor },
         ...(pump
           ? [
               {
@@ -321,7 +321,7 @@ function BodyPartsTab({ part }: { part?: string }) {
           <p className="muted small">
             {pump
               ? `Your pump: ${pump.ratio >= 1 ? "+" : "−"}${Math.abs((pump.ratio - 1) * 100).toFixed(1)} % on average (${pump.pairs} pumped readings with a rested one within a week). Diamonds are estimates from that.`
-              : "Pumped means measured during or within 2 hours after a workout that trained this muscle. With 3 or more pumped readings that have a rested one within a week, the chart estimates each from the other."}
+              : "Pumped means measured within 6 hours after the start of a workout that trained this muscle. With 3 or more pumped readings that have a rested one within a week, the chart estimates each from the other."}
           </p>
         )}
       </section>

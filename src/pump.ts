@@ -1,9 +1,7 @@
 import { parseLocal } from "./format";
 
-/** How long after a workout ends a measurement still counts as pumped. */
-export const PUMP_HOURS = 2;
-/** Assumed length of a workout still in progress (no duration yet). */
-const OPEN_WORKOUT_HOURS = 3;
+/** How long after a workout starts a measurement still counts as pumped. */
+export const PUMP_HOURS = 6;
 
 /**
  * Muscles under each tape measurement (library muscle ids). A part is only pumped by a workout that
@@ -27,18 +25,16 @@ export const PUMP_MUSCLES: Record<string, string[]> = {
 };
 
 /**
- * A measurement of `part` is "pumped" when it was taken during a workout that trained a muscle
- * under the tape, or within `PUMP_HOURS` after it ended. Times are local "YYYY-MM-DD HH:MM:SS"
- * strings; durations are seconds.
+ * A measurement of `part` is "pumped" when it was taken within `PUMP_HOURS` after the start of a
+ * workout that trained a muscle under the tape. Times are local "YYYY-MM-DD HH:MM:SS" strings.
  */
 export function isPumped(at: string, part: string, workouts: [string, number | null, string[]][]): boolean {
   const muscles = PUMP_MUSCLES[part];
   if (!muscles) return false;
   const t = +parseLocal(at);
-  return workouts.some(([start, duration, trained]) => {
+  return workouts.some(([start, , trained]) => {
     const s = +parseLocal(start);
-    const end = s + (duration ?? OPEN_WORKOUT_HOURS * 3600) * 1000;
-    return t >= s && t <= end + PUMP_HOURS * 3600000 && trained.some((m) => muscles.includes(m));
+    return t >= s && t <= s + PUMP_HOURS * 3600000 && trained.some((m) => muscles.includes(m));
   });
 }
 

@@ -112,13 +112,19 @@ sources, which aren't kept in git (the script's header says where to get them):
   clean & jerk). Each lifter's best per lift and age band, 10 kg bodyweight bins with at least 100
   lifters, blended between the two nearest bins. Tiers: Novice from half the median, Intermediate
   from the 10th percentile, Advanced from the median, Elite from the 90th.
-- CrossFit (not bundled, licence unclear): `download_crossfit` fetches the Kaggle dataset, checks
-  `athletes.csv` against `norms::CROSSFIT_CSV_SHA256`, builds the same table on the device
-  (`norms::crossfit_tables`, lb → kg, implausible values dropped) and keeps only that, in
-  `norms/crossfit.json` in the app data folder. Percentiles only, no tiers.
-- Exercises map to reference lifts in `norms::links`: the same lift, or a variation through
-  "your lift ≈ a + b × reference lift" with the study it comes from. Only ratios with a study are
-  included; per-hand dumbbell weights are doubled first (the studies use both dumbbells).
+- `crossfit.json`: the same format from the Kaggle CrossFit athletes dataset (CC BY 4.0), built
+  with `cargo run -p fitledger-core --example build_crossfit -- athletes.csv data/norms/crossfit.json`
+  (checks the file against `norms::CROSSFIT_CSV_SHA256`; `norms::crossfit_tables`: lb → kg,
+  implausible values dropped). Percentiles only, no tiers.
+- `conversions.json`: `scripts/build_conversions.py <cache dir>` fetches Strength Level's community
+  standards for about 115 exercises and their anchor lift (bench, squat, deadlift, clean & jerk)
+  and fits "exercise ≈ a + b × anchor" over the five levels, per sex. Only a and b are kept.
+  Strength Level lists dumbbells per dumbbell; two-dumbbell exercises are doubled.
+- Exercises map to reference lifts in `norms::links`: the same lift, a variation through
+  "your lift ≈ a + b × reference lift" with the study it comes from, or else a rough fit from
+  `conversions.json` (marked "rough estimate"). Per-hand dumbbell weights are doubled first (the
+  studies use both dumbbells), except for one-dumbbell exercises (`ONE_DUMBBELL` in
+  `src/components/Standing.tsx`).
 
 Age comes from the birth year and the profile (sex, height, birth year) is set on Measure →
 Body comp.

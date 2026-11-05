@@ -17,8 +17,8 @@ Sources (download them yourself, they are not kept in git):
            https://github.com/euanwm/OpenWeightlifting
 
 strength.json holds every bundled lift as {lift: {age_from, bw_from, male, female}}; each grid cell
-is {n, p} (percentile values) or null under MIN_N lifters. The app builds the same format for the
-CrossFit data on the device (crates/core/src/norms.rs), which isn't bundled.
+is {n, p} (percentile values) or null under MIN_N lifters. crossfit.json has the same format, built
+by crates/core/examples/build_crossfit.rs.
 
 Needs soffice (Word -> text) and pdftotext.
 """

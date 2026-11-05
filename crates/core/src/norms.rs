@@ -6,10 +6,12 @@
 //! - strength: OpenPowerlifting (raw, drug-tested) and OpenWeightlifting competitors, each lifter's
 //!   best per age band.
 //!
-//! CrossFit athletes' self-reported lifts aren't bundled (the data's licence is unclear): the app
-//! downloads them on request and builds the same kind of table on the device ([`crossfit_tables`]).
+//! `crossfit.json` (CrossFit athletes' self-reported lifts, CC BY 4.0) is built by
+//! `examples/build_crossfit.rs` with [`crossfit_tables`].
 //!
-//! Other exercises are compared through a published ratio to one of those lifts ([`links`]).
+//! Other exercises are compared through a published ratio to one of those lifts ([`links`]), or,
+//! with no study, a rough one fitted to Strength Level's community standards (`conversions.json`,
+//! built by `scripts/build_conversions.py`).
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -18,6 +20,8 @@ use std::sync::OnceLock;
 const BODY_COMPOSITION: &str = include_str!("../../../data/norms/body_composition.json");
 const BODY_SIZE: &str = include_str!("../../../data/norms/body_size.json");
 const STRENGTH: &str = include_str!("../../../data/norms/strength.json");
+const CROSSFIT: &str = include_str!("../../../data/norms/crossfit.json");
+const CONVERSIONS: &str = include_str!("../../../data/norms/conversions.json");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -54,6 +58,8 @@ pub struct Reference {
     pub unit: String,
     /// How your exercise was converted to the reference lift, when it was.
     pub conversion: Option<String>,
+    /// The conversion is a rough one (not from a study).
+    pub rough: bool,
 }
 
 /// Measures with reference data.
@@ -160,6 +166,7 @@ fn composition(metric: &str, who: &Who, values: &[f64]) -> Option<Reference> {
         title: String::new(),
         unit: String::new(),
         conversion: None,
+        rough: false,
     })
 }
 
@@ -244,13 +251,14 @@ fn size(metric: &str, who: &Who, values: &[f64]) -> Option<Reference> {
         title: String::new(),
         unit: String::new(),
         conversion: None,
+        rough: false,
     })
 }
 
 // ---------- Strength ----------
 
-/// Percentile grids for lifts: by sex, age band and 10 kg bodyweight bin. `strength.json`, and the
-/// CrossFit table built on the device, have this shape.
+/// Percentile grids for lifts: by sex, age band and 10 kg bodyweight bin. `strength.json` and
+/// `crossfit.json` have this shape.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LiftTables {
     pub percentiles: Vec<f64>,
@@ -277,6 +285,11 @@ pub struct Cell {
 pub fn bundled_lifts() -> &'static LiftTables {
     static T: OnceLock<LiftTables> = OnceLock::new();
     T.get_or_init(|| serde_json::from_str(STRENGTH).expect("strength.json"))
+}
+
+pub fn bundled_crossfit() -> &'static LiftTables {
+    static T: OnceLock<LiftTables> = OnceLock::new();
+    T.get_or_init(|| serde_json::from_str(CROSSFIT).expect("crossfit.json"))
 }
 
 /// Tier names and how each starts, from the competitor percentiles:
@@ -316,7 +329,7 @@ fn group(lift: &str) -> Group {
         } else {
             "who entered the CrossFit Open, from their self-reported bests (2017)"
         },
-        source: "CrossFit athlete profiles, Kaggle dataset ulrikthygepedersen/crossfit-athletes (downloaded on this device)",
+        source: "CrossFit athlete profiles, Kaggle dataset ulrikthygepedersen/crossfit-athletes (CC BY 4.0)",
         tiers: false,
         reps: lift == "cf_pullups",
     };
@@ -396,6 +409,7 @@ pub fn lift_reference(tables: &LiftTables, lift: &str, who: &Who, values: &[f64]
         title: g.title.into(),
         unit: if g.reps { "reps" } else { "kg" }.into(),
         conversion: None,
+        rough: false,
     })
 }
 
@@ -409,14 +423,58 @@ pub struct Link {
     pub female: Option<(f64, f64)>,
     /// Where the ratio comes from; `None` for the same lift.
     pub basis: Option<&'static str>,
+    /// Not from a study: fitted to community standards.
+    pub rough: bool,
 }
 
 const fn same(lift: &'static str) -> Link {
-    Link { lift, a: 0.0, b: 1.0, female: None, basis: None }
+    Link { lift, a: 0.0, b: 1.0, female: None, basis: None, rough: false }
 }
 
 const fn ratio(lift: &'static str, b: f64, basis: &'static str) -> Link {
-    Link { lift, a: 0.0, b, female: None, basis: Some(basis) }
+    Link { lift, a: 0.0, b, female: None, basis: Some(basis), rough: false }
+}
+
+/// A rough conversion from `conversions.json`: exercise ≈ a + b × lift, per sex.
+#[derive(Deserialize)]
+struct Fitted {
+    lift: String,
+    male: (f64, f64),
+    female: (f64, f64),
+    /// Strength Level's names for the exercise and the lift.
+    title: String,
+    anchor: String,
+    n: u64,
+    #[serde(skip)]
+    basis: String,
+}
+
+fn fitted() -> &'static BTreeMap<String, Fitted> {
+    static T: OnceLock<BTreeMap<String, Fitted>> = OnceLock::new();
+    T.get_or_init(|| {
+        let mut t: BTreeMap<String, Fitted> = serde_json::from_str(CONVERSIONS).expect("conversions.json");
+        for f in t.values_mut() {
+            f.basis = format!(
+                "no study compares these lifts, so this is fitted to Strength Level's community standards (strengthlevel.com, {} logged lifts), matching each level of {} to the same level of {}, Beginner to Elite",
+                group_digits(f.n),
+                f.title,
+                f.anchor,
+            );
+        }
+        t
+    })
+}
+
+fn group_digits(n: u64) -> String {
+    let s = n.to_string();
+    let mut out = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
 }
 
 const DUMBBELL_BENCH: &str =
@@ -425,8 +483,8 @@ const SMITH_BENCH: &str = "Smith machine bench 1RM was about 3 % below barbell (
 const INCLINE: &str = "flat bench 1RM is 21.5 % above a 25° incline in elite lifters and 28.6 % above 30° in active men; 0.80 sits between";
 const FRONT_SQUAT: &str = "front squat 1RM was about 78 % of back squat (Gullett et al. 2009, J Strength Cond Res) and 71 % (Atkins & Richards 2016)";
 
-/// Reference lifts for an exercise (by library slug), with the conversion used. Exercises not
-/// listed have no comparison: no study gives a usable ratio for them.
+/// Reference lifts for an exercise (by library slug), with the conversion used: a study's where
+/// there is one, else a rough fit from `conversions.json`. Other exercises have no comparison.
 pub fn links(slug: &str) -> Vec<Link> {
     match slug {
         "squat-barbell" => vec![same("squat"), same("cf_squat")],
@@ -459,18 +517,29 @@ pub fn links(slug: &str) -> Vec<Link> {
             basis: Some(
                 "men's Smith machine and free squat 1RMs didn't differ; for women, Smith = 28.3 kg + 0.73 × free (Cotterman, Darby & Skelly 2005)",
             ),
+            rough: false,
         }],
-        _ => vec![],
+        _ => fitted().get(slug).map_or(vec![], |f| {
+            let link = |lift: &'static str| Link { lift, a: f.male.0, b: f.male.1, female: Some(f.female), basis: Some(&f.basis), rough: true };
+            // Lifts with CrossFit data too are compared with both groups.
+            let cf = match f.lift.as_str() {
+                "squat" => Some("cf_squat"),
+                "deadlift" => Some("cf_deadlift"),
+                "clean_jerk" => Some("cf_clean_jerk"),
+                _ => None,
+            };
+            std::iter::once(link(&f.lift)).chain(cf.map(link)).collect()
+        }),
     }
 }
 
-/// Comparisons for one exercise: every linked reference lift with data (CrossFit only once
-/// downloaded). `weight` values are estimated 1RMs (kg), `reps` values most reps; oldest first.
-pub fn exercise_references(slug: &str, who: &Who, weight: &[f64], reps: &[f64], crossfit: Option<&LiftTables>) -> Vec<Reference> {
+/// Comparisons for one exercise: every linked reference lift with data. `weight` values are
+/// estimated 1RMs (kg), `reps` values most reps; oldest first.
+pub fn exercise_references(slug: &str, who: &Who, weight: &[f64], reps: &[f64]) -> Vec<Reference> {
     links(slug)
         .into_iter()
         .filter_map(|l| {
-            let tables = if l.lift.starts_with("cf_") { crossfit? } else { bundled_lifts() };
+            let tables = if l.lift.starts_with("cf_") { bundled_crossfit() } else { bundled_lifts() };
             let (a, b) = match (who.sex, l.female) {
                 (Sex::Female, Some(ab)) => ab,
                 _ => (l.a, l.b),
@@ -484,35 +553,24 @@ pub fn exercise_references(slug: &str, who: &Who, weight: &[f64], reps: &[f64], 
             r.tiers.iter_mut().for_each(|t| t.1 = back(t.1));
             if let Some(basis) = l.basis {
                 let name = LIFT_NAMES.iter().find(|n| n.0 == l.lift).map_or(l.lift, |n| n.1);
-                let how = if a == 0.0 { format!("{b:.2} × their {name}") } else { format!("{a} kg + {b} × their {name}") };
-                r.conversion = Some(format!("Estimated: compared as {how}, because {basis}."));
+                let how = match a {
+                    0.0 => format!("{b:.2} × their {name}"),
+                    a if a < 0.0 => format!("{b:.2} × their {name} − {} kg", -a),
+                    a => format!("{a} kg + {b:.2} × their {name}"),
+                };
+                let what = if l.rough { "Rough estimate" } else { "Estimated" };
+                r.conversion = Some(format!("{what}: compared as {how}, because {basis}."));
+                r.rough = l.rough;
             }
             Some(r)
         })
         .collect()
 }
 
-/// Whether an exercise has a CrossFit comparison (available once that data is downloaded).
-pub fn has_crossfit(slug: &str) -> bool {
-    links(slug).iter().any(|l| l.lift.starts_with("cf_"))
-}
+// ---------- CrossFit (built by examples/build_crossfit.rs) ----------
 
-// ---------- CrossFit (built on the device) ----------
-
-/// Where the CrossFit data is downloaded from, and the SHA-256 of the `athletes.csv` inside it.
-pub const CROSSFIT_URL: &str = "https://www.kaggle.com/api/v1/datasets/download/ulrikthygepedersen/crossfit-athletes";
+/// SHA-256 of the dataset's `athletes.csv` that `crossfit.json` was built from.
 pub const CROSSFIT_CSV_SHA256: &str = "e6a019bd1d2b6c29bf02a62693d22443850b12a1c475be9f68c34892bfc6ff83";
-
-/// `athletes.csv` from the downloaded zip.
-pub fn crossfit_csv_from_zip(zip_bytes: &[u8]) -> crate::Result<Vec<u8>> {
-    use std::io::Read;
-    let bad = |e: &dyn std::fmt::Display| crate::Error::Format(format!("CrossFit download: {e}"));
-    let mut z = zip::ZipArchive::new(std::io::Cursor::new(zip_bytes)).map_err(|e| bad(&e))?;
-    let mut f = z.by_name("athletes.csv").map_err(|e| bad(&e))?;
-    let mut out = Vec::new();
-    f.read_to_end(&mut out).map_err(|e| bad(&e))?;
-    Ok(out)
-}
 
 const AGE_FROM: [f64; 5] = [18.0, 40.0, 50.0, 60.0, 70.0];
 const MIN_N: usize = 100;
@@ -683,27 +741,48 @@ mod tests {
     }
 
     #[test]
+    fn rough_conversions_from_community_standards() {
+        let w = who(Sex::Male, 30.0);
+        // Every fitted exercise resolves to a comparison, and none shadows a study's.
+        for (slug, f) in fitted() {
+            let r = exercise_references(slug, &w, &[50.0], &[]);
+            assert!(!r.is_empty() && r[0].rough, "{slug}");
+            assert!(r[0].conversion.as_deref().unwrap().starts_with("Rough estimate"), "{slug}");
+            assert!(f.male.1 > 0.0 && f.female.1 > 0.0, "{slug}");
+        }
+        assert!(!fitted().contains_key("bench-press-dumbbell"));
+        // A cable fly ranks like the bench it converts to; the strip is in cable fly terms.
+        let f = &fitted()["cable-fly-high-to-low"];
+        let fly = &exercise_references("cable-fly-high-to-low", &w, &[40.0], &[])[0];
+        let bench = lift_reference(bundled_lifts(), "bench", &w, &[(40.0 - f.male.0) / f.male.1]).unwrap();
+        assert!((fly.ranks[0].unwrap() - bench.ranks[0].unwrap()).abs() < 1e-9);
+        // Leg press goes through the squat: powerlifters and CrossFit athletes.
+        let lp = exercise_references("leg-press", &w, &[250.0], &[]);
+        assert_eq!(lp.iter().map(|r| r.title.as_str()).collect::<Vec<_>>(), ["powerlifting competitors", "CrossFit athletes"]);
+    }
+
+    #[test]
     fn variations_convert_both_ways() {
         // A 100 kg dumbbell bench ranks like an 100/0.83 kg barbell bench, and the strip is in
         // dumbbell terms.
         let w = who(Sex::Male, 30.0);
-        let db = &exercise_references("bench-press-dumbbell", &w, &[100.0], &[], None)[0];
+        let db = &exercise_references("bench-press-dumbbell", &w, &[100.0], &[])[0];
         let bb = lift_reference(bundled_lifts(), "bench", &w, &[100.0 / 0.83]).unwrap();
         assert!((db.ranks[0].unwrap() - bb.ranks[0].unwrap()).abs() < 1e-9);
         assert!((db.points[9].1 - bb.points[9].1 * 0.83).abs() < 1e-9);
         assert!(db.conversion.as_deref().unwrap().contains("Saeterbakken"));
-        // Same lift: no conversion; CrossFit skipped until downloaded.
-        let sq = exercise_references("squat-barbell", &w, &[150.0], &[], None);
-        assert_eq!(sq.len(), 1);
+        // Same lift: no conversion; powerlifters and CrossFit athletes.
+        let sq = exercise_references("squat-barbell", &w, &[150.0], &[]);
+        assert_eq!(sq.len(), 2);
         assert!(sq[0].conversion.is_none());
-        assert!(has_crossfit("squat-barbell") && !has_crossfit("bench-press-dumbbell"));
+        assert_eq!(sq[1].title, "CrossFit athletes");
         // Women's Smith squat uses the linear equation.
         let f = who(Sex::Female, 30.0);
-        let smith = &exercise_references("squat-smith-machine", &f, &[28.3 + 0.73 * 80.0], &[], None)[0];
+        let smith = &exercise_references("squat-smith-machine", &f, &[28.3 + 0.73 * 80.0], &[])[0];
         let free = lift_reference(bundled_lifts(), "squat", &f, &[80.0]).unwrap();
         assert!((smith.ranks[0].unwrap() - free.ranks[0].unwrap()).abs() < 1e-9);
         // Unlinked exercises have nothing.
-        assert!(exercise_references("romanian-deadlift-dumbbell", &w, &[100.0], &[], None).is_empty());
+        assert!(exercise_references("crunch", &w, &[100.0], &[]).is_empty());
     }
 
     #[test]
@@ -716,13 +795,11 @@ mod tests {
         csv += "900,Male,30,180,5000,,,,\n901,,30,180,300,,,,\n902,Female,12,100,100,,,,\n";
         let t = crossfit_tables(csv.as_bytes()).unwrap();
         let w = Who { sex: Sex::Male, age: 30.0, bodyweight_kg: Some(180.0 * LB) };
-        let sq = exercise_references("squat-barbell", &w, &[349.5 * LB], &[], Some(&t));
-        assert_eq!(sq.len(), 2);
-        let cf = &sq[1];
+        let cf = lift_reference(&t, "cf_squat", &w, &[349.5 * LB]).unwrap();
         assert_eq!(cf.title, "CrossFit athletes");
         assert!(cf.tiers.is_empty());
         assert!((cf.ranks[0].unwrap() - 50.0).abs() < 1.0, "{:?}", cf.ranks);
-        let pull = &exercise_references("pull-up", &w, &[], &[15.0], Some(&t))[0];
+        let pull = lift_reference(&t, "cf_pullups", &w, &[15.0]).unwrap();
         assert_eq!(pull.unit, "reps");
         assert!(pull.ranks[0].is_some());
     }

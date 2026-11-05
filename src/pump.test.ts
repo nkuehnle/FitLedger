@@ -7,16 +7,17 @@ describe("isPumped", () => {
     ["2026-11-03 17:30:00", 3600, ["quads", "glutes"]],
     ["2026-11-04 07:00:00", null, ["triceps"]],
   ];
-  it("is pumped during or up to two hours after a workout that trained the muscle", () => {
+  it("is pumped up to 6 hours after a workout that trained the muscle", () => {
     expect(isPumped("2026-11-02 17:45:00", "left_bicep", workouts)).toBe(true);
     expect(isPumped("2026-11-02 20:30:00", "right_bicep", workouts)).toBe(true);
     expect(isPumped("2026-11-02 19:00:00", "chest", workouts)).toBe(true);
+    expect(isPumped("2026-11-02 23:15:00", "left_bicep", workouts)).toBe(true);
     expect(isPumped("2026-11-04 08:00:00", "left_bicep", workouts)).toBe(true);
   });
-  it("is not pumped by a workout for other muscles, hours later, or for the waist", () => {
-    expect(isPumped("2026-11-03 18:30:00", "left_bicep", workouts)).toBe(false);
+  it("is not pumped by a workout for other muscles, over 6 hours later, before it, or for the waist", () => {
+    expect(isPumped("2026-11-03 18:30:00", "neck", workouts)).toBe(false);
     expect(isPumped("2026-11-03 18:30:00", "left_thigh", workouts)).toBe(true);
-    expect(isPumped("2026-11-02 23:30:00", "left_bicep", workouts)).toBe(false);
+    expect(isPumped("2026-11-02 23:45:00", "left_bicep", workouts)).toBe(false);
     expect(isPumped("2026-11-02 07:10:00", "left_bicep", workouts)).toBe(false);
     expect(isPumped("2026-11-02 18:00:00", "waist", workouts)).toBe(false);
   });

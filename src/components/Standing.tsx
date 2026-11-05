@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type ExerciseComparison, type NormReference, type NormWho } from "../api";
+import { api, type NormReference, type NormWho } from "../api";
 import { usePrefs } from "../App";
 import { parseLocal, toUnit } from "../format";
 
@@ -196,9 +196,18 @@ export function StandingView({ reference: ref, label, values, show, note }: Stan
   );
 }
 
+const ONE_DUMBBELL = new Set([
+  "bent-over-one-arm-row-dumbbell",
+  "concentration-curl-dumbbell",
+  "pullover-dumbbell",
+  "overhead-triceps-extension-dumbbell",
+  "single-leg-romanian-deadlift-dumbbell",
+  "goblet-squat-dumbbell",
+]);
+
 /**
- * How an exercise compares: every reference group with data (competitors, and CrossFit athletes
- * once downloaded), converted through a published ratio for variations. `weight` are estimated
+ * How an exercise compares: every reference group with data (competitors, CrossFit athletes),
+ * converted through a published or rough ratio for other exercises. `weight` are estimated
  * 1RMs in kg and `reps` most reps, oldest first.
  */
 export function ExerciseComparisons({
@@ -208,7 +217,6 @@ export function ExerciseComparisons({
   reps,
   label,
   note,
-  offerDownload = false,
   perHand = false,
   dumbbell = false,
 }: {
@@ -219,12 +227,16 @@ export function ExerciseComparisons({
   /** Prefix for each strip's label (e.g. the exercise name in a workout summary). */
   label?: string;
   note?: string;
-  offerDownload?: boolean;
   /** Weights logged per dumbbell: compared (and shown) as both together, as the studies measure. */
   perHand?: boolean;
   /** A dumbbell exercise: say which way its weights were read. */
   dumbbell?: boolean;
 }) {
+  // Exercises done with one dumbbell are compared at that dumbbell's weight.
+  if (ONE_DUMBBELL.has(slug)) {
+    perHand = false;
+    dumbbell = false;
+  }
   weight = perHand ? weight.map((w) => w * 2) : weight;
   if (dumbbell)
     note = `${note ?? ""} ${
@@ -233,43 +245,23 @@ export function ExerciseComparisons({
         : "Your weights are read as both dumbbells together (this exercise is set to total load); if you log one dumbbell's weight, turn on “weights per hand” under Edit on the exercise."
     }`.trim();
   const { unit } = usePrefs();
-  const [c, setC] = useState<ExerciseComparison | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [refs, setRefs] = useState<NormReference[] | null>(null);
   const key = JSON.stringify([slug, who, weight, reps]);
-  const load = () => api.exerciseComparison(slug, who, weight, reps).then(setC);
   useEffect(() => {
-    load();
+    api.exerciseComparison(slug, who, weight, reps).then(setRefs);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
-  if (!c) return null;
+  if (!refs) return null;
   const showKg = (kg: number) => `${Math.round(toUnit(kg, unit))} ${unit}`;
-  async function download() {
-    setBusy("Downloading (13 MB)…");
-    try {
-      await api.downloadCrossfit();
-      setBusy(null);
-      load();
-    } catch (e) {
-      setBusy(String(e));
-    }
-  }
   return (
     <>
-      {c.references.map((r) => {
+      {refs.map((r) => {
         const reps_ = r.unit === "reps";
         const vals = reps_ ? reps : weight;
         const show = reps_ ? (v: number) => `${Math.round(v)} reps` : perHand ? (v: number) => `${showKg(v)} (both)` : showKg;
-        const head = `${label ? `${label}: ${show(vals[vals.length - 1])} · ` : ""}vs ${r.title}${r.conversion ? " (estimated)" : ""}`;
+        const head = `${label ? `${label}: ${show(vals[vals.length - 1])} · ` : ""}vs ${r.title}${r.rough ? " (rough estimate)" : r.conversion ? " (estimated)" : ""}`;
         return <StandingView key={r.title} reference={r} label={head} values={vals} show={show} note={note} />;
       })}
-      {offerDownload && c.crossfit_offer && (
-        <div className="row small">
-          <button className="button small" onClick={download} disabled={busy?.startsWith("Downloading")}>
-            Also compare with CrossFit athletes
-          </button>
-          <span className="muted">{busy ?? "13 MB download, kept on this device. Not bundled: the data's licence is unclear."}</span>
-        </div>
-      )}
     </>
   );
 }

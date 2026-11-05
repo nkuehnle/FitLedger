@@ -622,12 +622,8 @@ export interface NormReference {
   unit: string;
   /** How your exercise was converted to the reference lift. */
   conversion: string | null;
-}
-
-export interface ExerciseComparison {
-  references: NormReference[];
-  /** A CrossFit comparison exists for this exercise but hasn't been downloaded. */
-  crossfit_offer: boolean;
+  /** The conversion is rough (fitted to community standards, not from a study). */
+  rough: boolean;
 }
 
 export const api = {
@@ -754,9 +750,8 @@ export const api = {
     invoke<NormReference | null>("norm_reference", { metric, who, values }),
   /** Estimated 1RMs (kg) and most reps, oldest first. */
   exerciseComparison: (slug: string, who: NormWho, weight: number[], reps: number[]) =>
-    invoke<ExerciseComparison>("exercise_comparison", { slug, who, weight, reps }),
+    invoke<NormReference[]>("exercise_comparison", { slug, who, weight, reps }),
   comparableExercises: (slugs: string[]) => invoke<string[]>("comparable_exercises", { slugs }),
-  downloadCrossfit: () => invoke<void>("download_crossfit"),
   /** On-device OCR of an InBody 580 result sheet image (base64); values in storage units. */
   readInbodyImage: (data: string, massUnit: "kg" | "lb") =>
     invoke<{ measured_at: string | null; values: Record<string, number>; doubtful: string[]; mass_unit: "kg" | "lb" | null }>(

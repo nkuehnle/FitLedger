@@ -62,10 +62,12 @@ from **Settings → Import, export & backup → Restore…**.
   rep maxes and PR history.
 - **Strength tiers** (Beginner to Elite, plus a percentile) against competitors of your sex, age
   and bodyweight: squat, bench and deadlift (raw, drug-tested powerlifters), snatch and clean & jerk
-  (weightlifters). Close variations are compared through published ratios and marked as estimates:
-  dumbbell, Smith machine, incline and close-grip bench, front and Smith squat, trap bar deadlift.
-  Optionally, a one-time 13 MB download adds CrossFit athletes' self-reported lifts (squat,
-  deadlift, Olympic lifts, pull-ups) as an everyday-lifter comparison. Shown on each exercise's
+  (weightlifters), plus CrossFit athletes' self-reported lifts (squat, deadlift, Olympic lifts,
+  pull-ups) as an everyday-lifter comparison. Close variations are compared through published
+  ratios and marked as estimates: dumbbell, Smith machine, incline and close-grip bench, front and
+  Smith squat, trap bar deadlift. About 115 more exercises (overhead presses, rows, pulldowns,
+  flies, curls, leg press, machines, …) get a rough estimate, converted to the bench, squat or
+  deadlift with ratios fitted to Strength Level's community standards. Shown on each exercise's
   Records tab and in workout summaries.
 - **Body map heat map** of the muscles you trained, colored against weekly set targets, plus a
   muscle-by-week grid and a recovery view.
@@ -76,8 +78,8 @@ from **Settings → Import, export & backup → Restore…**.
 
 - **Bodyweight** with a 7-day average, change per week, a goal (cut, maintain or gain) with a
   weekly target, and weigh-in reminders on the days you choose.
-- **Body parts:** log any measurement (waist, neck, arms, …) and chart it. Readings taken during or
-  within 2 hours after a workout that trained that muscle are charted as "pumped", separately from rested ones, and once you have a
+- **Body parts:** log any measurement (waist, neck, arms, …) and chart it. Readings taken within 6
+  hours after a workout that trained that muscle are charted as "pumped", separately from rested ones, and once you have a
   few of each, your own pump size fills in estimates for both lines.
 - **Body composition:** InBody scans by hand, from a CSV, or **read straight from a photo of an
   InBody 580 result sheet** with on-device OCR. Body fat, lean mass and fat mass are charted
@@ -136,10 +138,13 @@ Comparison data: body composition from Kelly, Wilson & Heymsfield (2009), "Dual 
 Absorptiometry Body Composition Reference Values from NHANES", PLoS ONE 4(9): e7038 (CC BY);
 weight, BMI, waist and arm from the CDC's Anthropometric Reference Data, NHANES 2015–2018 (public
 domain); strength from the [OpenPowerlifting](https://www.openpowerlifting.org) and
-[OpenWeightlifting](https://www.openweightlifting.org) projects (public domain). The optional
-CrossFit comparison is downloaded on your device from the Kaggle dataset
-[ulrikthygepedersen/crossfit-athletes](https://www.kaggle.com/datasets/ulrikthygepedersen/crossfit-athletes)
-and isn't bundled. Variation ratios come from Saeterbakken et al. 2011, Cotterman et al. 2005,
+[OpenWeightlifting](https://www.openweightlifting.org) projects (public domain); CrossFit athletes
+from Ulrik Thyge Pedersen's Kaggle dataset
+[Crossfit Athletes](https://www.kaggle.com/datasets/ulrikthygepedersen/crossfit-athletes)
+(CC BY 4.0; only percentile tables derived from it are bundled). Rough conversions for other
+exercises are fitted to the community standards published by
+[Strength Level](https://strengthlevel.com/strength-standards) (only the fitted ratios are kept).
+Variation ratios come from Saeterbakken et al. 2011, Cotterman et al. 2005,
 Gullett et al. 2009, Atkins & Richards 2016, Swinton et al. 2011 and Larsen et al. 2020 (details in
 `crates/core/src/norms.rs`).
 

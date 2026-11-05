@@ -279,7 +279,6 @@ function ExerciseDetail({ id }: { id: number }) {
                   weight={ends(firstE1rm ?? undefined, stats.best_e1rm?.value)}
                   reps={ends(firstReps, stats.most_reps?.value)}
                   note={`Your best ever (first: hollow dot), at your latest bodyweight (${Math.round(toUnit(latestKg, unit))} ${unit}). The reference numbers are actual maxes; yours is estimated from your sets.`}
-                  offerDownload
                   perHand={info.load_mode === "per_hand"}
                   dumbbell={info.equipment === "dumbbell"}
                 />
