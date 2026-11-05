@@ -88,7 +88,7 @@ export default function App() {
     api.getSetting("weight_unit").then((u) => u && setUnitState(u as WeightUnit));
     api.getSetting("theme").then((t) => t && setThemeState(t as Theme));
     loadWeighInPlan().then(syncWeighInReminder);
-    // Weekly automatic backup, a few seconds after start so it doesn't slow the first screen.
+    // Automatic backup, a few seconds after start so it doesn't slow the first screen.
     const t = setTimeout(() => api.autoBackup(false).catch(() => {}), 5000);
     // New data from the watch (Health Connect), once connected.
     const t2 = setTimeout(() => autoSyncHealthConnect().catch(() => {}), 3000);

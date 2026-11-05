@@ -259,11 +259,11 @@ function ExportBackup() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<{ path: string; backup: BackupInfo; local: BackupInfo } | null>(null);
   const [shareExports, setShareExports] = useState(false);
-  const [auto, setAuto] = useState<{ on: boolean; last: string | null } | null>(null);
+  const [auto, setAuto] = useState<{ on: boolean; last: string | null; days: string; error: string | null; dir: string | null } | null>(null);
   useEffect(() => {
     api.getSetting("last_backup_at").then(setLast);
-    Promise.all([api.getSetting("auto_backup"), api.getSetting("last_auto_backup_at")]).then(([on, last]) =>
-      setAuto({ on: on !== "off", last }),
+    Promise.all(["auto_backup", "last_auto_backup_at", "auto_backup_days", "last_auto_backup_error", "auto_backup_dir"].map(api.getSetting)).then(
+      ([on, last, days, error, dir]) => setAuto({ on: on !== "off", last, days: days === "1" ? "1" : "7", error, dir }),
     );
   }, []);
   const run = async (f: () => Promise<string | null>) => {
@@ -385,12 +385,59 @@ function ExportBackup() {
                   api.setSetting("auto_backup", e.target.checked ? "on" : "off");
                 }}
               />
-              Back up automatically every week to {IS_ANDROID ? "Download/FitLedger" : "the app's auto-backups folder"} (keeps the last 4)
+              Back up automatically to {IS_ANDROID ? "Download/FitLedger" : auto.dir || "the app's auto-backups folder"}
             </label>
             {auto.on && (
-              <p className="muted small">
-                {auto.last ? `Last automatic backup: ${formatDate(auto.last)}.` : "The first one runs the next time the app starts."}
-              </p>
+              <>
+                <div className="segmented">
+                  {[
+                    ["7", "Weekly (keeps 4)"],
+                    ["1", "Daily (keeps 7)"],
+                  ].map(([v, l]) => (
+                    <button
+                      key={v}
+                      className={auto.days === v ? "active" : ""}
+                      onClick={() => {
+                        setAuto({ ...auto, days: v });
+                        api.setSetting("auto_backup_days", v);
+                      }}
+                    >
+                      {l}
+                    </button>
+                  ))}
+                </div>
+                {!IS_ANDROID && (
+                  <div className="row">
+                    <button
+                      className="button small"
+                      onClick={async () => {
+                        const dir = await open({ directory: true });
+                        if (typeof dir !== "string") return;
+                        await api.setSetting("auto_backup_dir", dir);
+                        setAuto({ ...auto, dir });
+                      }}
+                    >
+                      Choose folder…
+                    </button>
+                    {auto.dir && (
+                      <button
+                        className="button small"
+                        onClick={async () => {
+                          await api.setSetting("auto_backup_dir", "");
+                          setAuto({ ...auto, dir: null });
+                        }}
+                      >
+                        Use default folder
+                      </button>
+                    )}
+                  </div>
+                )}
+                {auto.error && <p className="warn small">⚠ The last automatic backup failed: {auto.error}</p>}
+                <p className="muted small">
+                  {auto.last ? `Last automatic backup: ${formatDate(auto.last)}.` : "The first one runs the next time the app starts."} It runs
+                  when you open the app or finish a workout.
+                </p>
+              </>
             )}
           </>
         )}
@@ -421,17 +468,18 @@ function ExportBackup() {
               </tbody>
             </table>
             {(pending.local.last_workout ?? "") > (pending.backup.last_workout ?? "") && (
-              <p className="warn small">⚠ This device has newer workouts than the backup. Restoring will lose them.</p>
+              <p className="warn small">⚠ This device has newer workouts than the backup. They'll be replaced.</p>
             )}
+            <p className="muted small">A safety copy of this device's data is saved first.</p>
             <div className="row">
               <button
                 className="button danger"
                 onClick={() =>
                   run(async () => {
-                    await api.restoreFrom(pending.path);
+                    const copy = await api.restoreFrom(pending.path);
                     setPending(null);
-                    setTimeout(() => window.location.reload(), 800);
-                    return "Restored. Reloading…";
+                    setTimeout(() => window.location.reload(), 4000);
+                    return `Restored. Safety copy: ${copy}. Reloading…`;
                   })
                 }
               >

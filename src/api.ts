@@ -589,6 +589,14 @@ export interface MeasurementRow {
   value: number;
 }
 
+export interface RoutinePreview {
+  name: string;
+  description: string | null;
+  templates: [string, number][];
+  has_schedule: boolean;
+  new_exercises: string[];
+}
+
 export interface BackupInfo {
   schema_version: number;
   workouts: number;
@@ -661,7 +669,7 @@ export const api = {
   /** A Garmin .fit file or a .zip of them, base64. */
   importFit: (data: string) => invoke<WearableSummary>("import_fit", { data }),
   dayHealth: () => invoke<DayHealth[]>("day_health"),
-  /** Weekly backup to Download/FitLedger (Android) if due, or now with `force`; returns where it went. */
+  /** Automatic backup to Download/FitLedger (Android) if due, or now with `force`; returns where it went. */
   autoBackup: (force: boolean) => invoke<string | null>("auto_backup", { force }),
 
   perHandSuspects: () => invoke<PerHandSuspect[]>("per_hand_suspects"),
@@ -738,6 +746,10 @@ export const api = {
     invoke<[string, string][]>("apply_history_proposal", { proposal, start }),
   programs: () => invoke<Program[]>("programs"),
   installProgram: (programId: string, start: string) => invoke<number[]>("install_program", { programId, start }),
+  /** A routine file for one template, or for the active schedule without an id. */
+  routineText: (templateId?: number) => invoke<string>("routine_text", { templateId: templateId ?? null }),
+  previewRoutine: (text: string) => invoke<RoutinePreview>("preview_routine", { text }),
+  importRoutine: (text: string, activate: boolean, start: string) => invoke<number[]>("import_routine", { text, activate, start }),
 
   weighIns: (includeInbody: boolean) => invoke<WeighInRow[]>("weigh_ins", { includeInbody }),
   addWeighIn: (at: string, weightKg: number) => invoke<number>("add_weigh_in", { at, weightKg }),
@@ -775,7 +787,12 @@ export const api = {
     invoke<void>("export_file", { kind, path }),
   backupTo: (path: string) => invoke<BackupInfo>("backup_to", { path }),
   inspectBackup: (path: string) => invoke<BackupInfo>("inspect_backup", { path }),
-  restoreFrom: (path: string) => invoke<BackupInfo>("restore_from", { path }),
+  /** Saves a safety copy of this device's data first and returns where it went. */
+  restoreFrom: (path: string) => invoke<string>("restore_from", { path }),
+  saveText: (path: string, text: string) => invoke<void>("save_text", { path, text }),
+  shareText: (name: string, mime: string, text: string) => invoke<void>("share_text", { name, mime, text }),
+  copyText: (text: string) => invoke<void>("copy_text", { text }),
+  progressReport: (weeks: number, includeBody: boolean) => invoke<string>("progress_report", { weeks, includeBody }),
   dbInfo: () => invoke<BackupInfo>("db_info"),
   saveBase64: (path: string, data: string) => invoke<void>("save_base64", { path, data }),
   copyPng: (data: string) => invoke<void>("copy_png", { data }),

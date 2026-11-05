@@ -333,7 +333,16 @@ class RestTimerPlugin(private val activity: Activity) : Plugin(activity) {
             invoke.reject("Couldn't save the file")
             return
         }
-        resolver.openOutputStream(uri)!!.use { out -> file.inputStream().use { it.copyTo(out) } }
+        // The entry exists before the copy: a failed copy mustn't leave an empty file behind.
+        try {
+            if (file.length() == 0L) throw java.io.IOException("nothing to save")
+            val written = resolver.openOutputStream(uri)!!.use { out -> file.inputStream().use { it.copyTo(out) } }
+            if (written != file.length()) throw java.io.IOException("the copy is incomplete")
+        } catch (e: Exception) {
+            resolver.delete(uri, null, null)
+            invoke.reject("Couldn't save the file: ${e.message}")
+            return
+        }
         invoke.resolve()
     }
 

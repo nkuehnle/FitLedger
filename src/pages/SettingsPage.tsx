@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { usePrefs, type Theme } from "../App";
 import { api, type WeightUnit } from "../api";
+import { ClaudeCard } from "../components/ClaudeCard";
 import { WearablesCard } from "../components/WearablesCard";
 import { IS_ANDROID } from "../platform";
 import { loadWeighInPlan, saveWeighInPlan, type WeighInPlan } from "../weighIn";
@@ -166,6 +167,7 @@ export default function SettingsPage() {
           Count warm-up sets in stats and PRs
         </label>
       </section>
+      <ClaudeCard />
       <section className="card">
         <h2 className="section-title">Data</h2>
         <div className="export-list">

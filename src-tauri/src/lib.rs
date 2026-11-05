@@ -9,12 +9,13 @@ use chrono::{Local, NaiveDate, NaiveDateTime};
 use fitledger_core::body::{CsvMapping, DietDay, EnergyPoint, InBodyCsvPreview, InBodyScan, MeasurementRow, WeighInRow, BODY_PARTS, INBODY_FIELDS};
 use fitledger_core::db::{Counts, Db, ImportOutcome};
 use fitledger_core::exercises::{ExerciseEdit, ExerciseInfo, PerHandSuspect};
-use fitledger_core::export::BackupInfo;
+use fitledger_core::export::{auto_backup_due, auto_backup_policy, BackupInfo};
 use fitledger_core::history::{WorkoutCard, WorkoutDetail};
 use fitledger_core::library::{library, Muscle, MuscleGroup};
 use fitledger_core::live::{ExerciseUpdate, OrderEntry, Previous, SetUpdate, StartFrom, WorkoutUpdate};
 use fitledger_core::planning::{Goal, GoalEntry, HistoryProposal, MuscleTarget, Phase, Program, Schedule, Suggestion};
 use fitledger_core::review::{NameReview, SuggestionView};
+use fitledger_core::routines::{parse_routine, RoutinePreview};
 use fitledger_core::stats::{DiscomfortPoint, ExerciseStats, LastTrained, MuscleStat, PeriodCount, Streak, WeekMuscleSets, WorkoutPoint};
 use fitledger_core::strong::{self, ImportOptions};
 use fitledger_core::templates::{CreatedTemplate, Template};
@@ -706,6 +707,58 @@ fn export_text(state: &State<AppState>, kind: &str) -> CmdResult<String> {
     })
 }
 
+/// Writes generated text to `path` (desktop save dialog).
+#[tauri::command]
+fn save_text(path: String, text: String) -> CmdResult<()> {
+    std::fs::write(&path, text).map_err(|e| format!("couldn't write {path}: {e}"))
+}
+
+/// Opens the share sheet for generated text as a file called `name`.
+#[tauri::command]
+fn share_text(app: tauri::AppHandle, name: String, mime: String, text: String) -> CmdResult<()> {
+    let file = std::path::Path::new(&name).file_name().ok_or("bad file name")?;
+    let path = share_dir(&app)?.join(file);
+    std::fs::write(&path, text).map_err(|e| e.to_string())?;
+    share_file(&app, &path, &mime, "Share")
+}
+
+#[tauri::command]
+fn copy_text(app: tauri::AppHandle, text: String) -> CmdResult<()> {
+    use tauri_plugin_clipboard_manager::ClipboardExt;
+    app.clipboard().write_text(text).map_err(|e| e.to_string())
+}
+
+/// A routine file: one template, or the active schedule and its templates.
+#[tauri::command]
+fn routine_text(state: State<AppState>, template_id: Option<i64>) -> CmdResult<String> {
+    with(&state, |db| {
+        let r = match template_id {
+            Some(id) => db.export_template_routine(id)?,
+            None => db.export_active_routine()?,
+        };
+        Ok(serde_json::to_string_pretty(&r).expect("json serializes"))
+    })
+}
+
+#[tauri::command]
+fn preview_routine(state: State<AppState>, text: String) -> CmdResult<RoutinePreview> {
+    with(&state, |db| db.preview_routine(&parse_routine(&text)?))
+}
+
+#[tauri::command]
+fn import_routine(state: State<AppState>, text: String, activate: bool, start: String) -> CmdResult<Vec<i64>> {
+    let d = date(&start)?;
+    with(&state, |db| db.install_routine(&parse_routine(&text)?, activate, d))
+}
+
+#[tauri::command]
+fn progress_report(state: State<AppState>, weeks: i64, include_body: bool) -> CmdResult<String> {
+    with(&state, |db| {
+        let unit = unit_setting(db)?;
+        db.progress_report(Local::now().date_naive(), weeks, unit, include_body)
+    })
+}
+
 /// Writes an export to `path` (desktop save dialog).
 #[tauri::command]
 fn export_file(state: State<AppState>, kind: String, path: String) -> CmdResult<()> {
@@ -938,56 +991,79 @@ fn log_cardio(state: State<AppState>, entry: fitledger_core::cardio::CardioEntry
 
 // ---- Automatic backups ------------------------------------------------------------------------------
 //
-// Once a week (checked when the app starts) a full backup goes to Download/FitLedger on Android, or
-// the app data folder's auto-backups/ elsewhere; only the newest AUTO_KEEP are kept.
+// Weekly or daily (checked when the app starts and after a workout) a full backup goes to
+// Download/FitLedger on Android, or a chosen folder or the app data folder's auto-backups/
+// elsewhere. Only the newest few are kept.
 
-const AUTO_EVERY_DAYS: i64 = 7;
-const AUTO_KEEP: usize = 4;
-
-/// Makes the weekly backup if one is due (or `force`); returns where it went, if it ran.
-#[tauri::command]
-fn auto_backup(app: tauri::AppHandle, state: State<AppState>, force: bool) -> CmdResult<Option<String>> {
-    let (enabled, last, workouts) = with(&state, |db| {
-        Ok((db.setting("auto_backup")?.as_deref() != Some("off"), db.setting("last_auto_backup_at")?, db.counts()?.workouts))
-    })?;
-    let due = last
-        .and_then(|l| chrono::NaiveDateTime::parse_from_str(&l, "%Y-%m-%d %H:%M:%S").ok())
-        // A date in the future (clock changed, restored from elsewhere) counts as due too.
-        .is_none_or(|l| {
-            let now = Local::now().naive_local();
-            l > now || (now - l).num_days() >= AUTO_EVERY_DAYS
-        });
-    if !force && (!enabled || !due || workouts == 0) {
-        return Ok(None);
-    }
-    let name = format!("fitledger-auto-{}.fitledger", today_stamp());
+/// Writes a full backup and prunes older ones with the same prefix; returns where it went. On
+/// desktop that's the folder the user chose, or the app data folder's auto-backups/.
+fn write_backup_copy(app: &tauri::AppHandle, db: &Db, name: &str, prefix: &str, keep: usize) -> CmdResult<String> {
     #[cfg(target_os = "android")]
-    let place = {
-        let path = share_dir(&app)?.join(&name);
-        with(&state, |db| db.backup_to(&path))?;
-        native_call(&app, "saveDownload", serde_json::json!({ "path": path.to_string_lossy(), "mime": "application/octet-stream", "title": "" }))?;
-        native_call(&app, "pruneDownloads", serde_json::json!({ "prefix": "fitledger-auto-", "keep": AUTO_KEEP }))?;
-        format!("Download/FitLedger/{name}")
-    };
+    {
+        let path = share_dir(app)?.join(name);
+        db.backup_to(&path).map_err(err)?;
+        native_call(app, "saveDownload", serde_json::json!({ "path": path.to_string_lossy(), "mime": "application/octet-stream", "title": "" }))?;
+        native_call(app, "pruneDownloads", serde_json::json!({ "prefix": prefix, "keep": keep }))?;
+        Ok(format!("Download/FitLedger/{name}"))
+    }
     #[cfg(not(target_os = "android"))]
-    let place = {
-        let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("auto-backups");
-        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let path = dir.join(&name);
-        with(&state, |db| db.backup_to(&path))?;
+    {
+        let chosen = db.setting("auto_backup_dir").map_err(err)?.filter(|d| !d.is_empty());
+        let dir = match chosen {
+            Some(d) => std::path::PathBuf::from(d),
+            None => {
+                let d = app.path().app_data_dir().map_err(|e| e.to_string())?.join("auto-backups");
+                std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;
+                d
+            }
+        };
+        if !dir.is_dir() {
+            return Err(format!("backup folder not found: {}", dir.display()));
+        }
+        let path = dir.join(name);
+        db.backup_to(&path).map_err(err)?;
         let mut old: Vec<_> = std::fs::read_dir(&dir)
             .map_err(|e| e.to_string())?
             .filter_map(|e| e.ok().map(|e| e.path()))
-            .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("fitledger-auto-")))
+            .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with(prefix)))
             .collect();
         old.sort();
-        for p in old.iter().rev().skip(AUTO_KEEP) {
+        for p in old.iter().rev().skip(keep) {
             let _ = std::fs::remove_file(p);
         }
-        path.to_string_lossy().into_owned()
-    };
-    with(&state, |db| db.set_setting("last_auto_backup_at", &Local::now().naive_local().format("%Y-%m-%d %H:%M:%S").to_string()))?;
-    Ok(Some(place))
+        Ok(path.to_string_lossy().into_owned())
+    }
+}
+
+/// Makes the automatic backup if one is due (or `force`); returns where it went, if it ran.
+/// A failure is remembered so the app can show it.
+#[tauri::command]
+fn auto_backup(app: tauri::AppHandle, state: State<AppState>, force: bool) -> CmdResult<Option<String>> {
+    let now = Local::now().naive_local();
+    with(&state, |db| {
+        let (every_days, keep) = auto_backup_policy(db.setting("auto_backup_days")?.as_deref());
+        let enabled = db.setting("auto_backup")?.as_deref() != Some("off");
+        let due = auto_backup_due(db.setting("last_auto_backup_at")?.as_deref(), now, every_days);
+        if !force && (!enabled || !due || db.counts()?.workouts == 0) {
+            return Ok(Err(None));
+        }
+        let name = format!("fitledger-auto-{}.fitledger", today_stamp());
+        Ok(match write_backup_copy(&app, db, &name, "fitledger-auto-", keep) {
+            Ok(place) => {
+                db.record_auto_backup(Ok(()), now)?;
+                Ok(place)
+            }
+            Err(e) => {
+                db.record_auto_backup(Err(&e), now)?;
+                Err(Some(e))
+            }
+        })
+    })
+    .and_then(|outcome| match outcome {
+        Ok(place) => Ok(Some(place)),
+        Err(None) => Ok(None),
+        Err(Some(e)) => Err(e),
+    })
 }
 
 #[tauri::command]
@@ -1005,8 +1081,12 @@ fn inspect_backup(path: String) -> CmdResult<BackupInfo> {
 }
 
 #[tauri::command]
-fn restore_from(state: State<AppState>, path: String) -> CmdResult<BackupInfo> {
-    with(&state, |db| db.restore_from(&path))
+fn restore_from(app: tauri::AppHandle, state: State<AppState>, path: String) -> CmdResult<String> {
+    // The time is in the name so a second restore can't replace the first one's safety copy.
+    let name = format!("fitledger-before-restore-{}.fitledger", Local::now().format("%Y-%m-%d-%H%M%S"));
+    with(&state, |db| {
+        db.restore_with_snapshot(&path, |db| write_backup_copy(&app, db, &name, "fitledger-before-restore-", 2).map_err(fitledger_core::Error::Format))
+    })
 }
 
 #[tauri::command]
@@ -1270,7 +1350,8 @@ pub fn run() {
             muscle_sets, weekly_muscle_sets, last_trained, workouts_per_period, streak, workout_series, discomfort_points,
             list_templates, save_template, archive_template, template_from_workout, active_schedule, save_schedule,
             suggestion, projected_weekly_sets, muscle_targets, set_muscle_target, current_goal, set_goal, goal_history, progress_health, list_phases, save_phase, delete_phase,
-            propose_from_history, apply_history_proposal, programs, install_program,
+            propose_from_history, apply_history_proposal, programs, install_program, routine_text, preview_routine, import_routine,
+            progress_report, save_text, share_text, copy_text,
             weigh_ins, add_weigh_in, update_weigh_in, update_measurement, delete_weigh_in, inbody_fields, inbody_scans, save_inbody_scan, delete_inbody_scan, norm_reference, exercise_comparison, comparable_exercises,
             preview_inbody_csv, import_inbody_csv, diet_days, save_diet_day, energy_balance,
             body_parts, measurements, add_measurement, delete_measurement,

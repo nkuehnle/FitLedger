@@ -135,7 +135,7 @@ impl Db {
         Ok(self.list_exercises(false)?.into_iter().find(|e| e.id == id))
     }
 
-    fn validate(&self, e: &ExerciseEdit) -> Result<()> {
+    pub(crate) fn validate_exercise(&self, e: &ExerciseEdit) -> Result<()> {
         if e.name.trim().is_empty() {
             return Err(Error::Format("exercise name can't be empty".into()));
         }
@@ -166,7 +166,7 @@ impl Db {
 
     /// Edits any exercise. Built-in ones are marked `user_modified` so library updates keep the edit.
     pub fn update_exercise(&mut self, id: i64, e: &ExerciseEdit) -> Result<()> {
-        self.validate(e)?;
+        self.validate_exercise(e)?;
         self.conn().execute(
             "UPDATE exercise SET name = ?2, equipment = ?3, pattern = ?4, kind = ?5, load_mode = ?6, default_rest_s = ?7,
                  setup_note = ?8, user_modified = 1 WHERE id = ?1",
@@ -178,7 +178,7 @@ impl Db {
     }
 
     pub fn create_exercise(&mut self, e: &ExerciseEdit) -> Result<i64> {
-        self.validate(e)?;
+        self.validate_exercise(e)?;
         let base = format!("custom-{}", slugify(&e.name));
         let mut slug = base.clone();
         let mut n = 2;

@@ -51,6 +51,8 @@ from **Settings → Import, export & backup → Restore…**.
   repeated misses) and a next-time "up / hold / down" note for each exercise.
 - **Templates, routines and starter programs**, with a weekly or custom-length schedule. The
   New workout list puts today's planned workout, or one you missed this week, first.
+- **Shareable routines:** send a schedule or a single template as a `.fitroutine` file, custom
+  exercises included. The file holds your plan only, never your logged workouts or weights.
 - **Perform again:** repeat any past workout. When you finish, the app asks whether to update the
   template.
 - **Cardio:** runs, rides and rows with live pace (or speed, or /500 m), average heart rate,
@@ -116,11 +118,26 @@ from **Settings → Import, export & backup → Restore…**.
 
 - **Offline first.** The only network use is a one-time 12 MB download of the InBody sheet reader
   the first time you read a sheet.
-- **Backups:** manual backups, a weekly automatic backup to `Download/FitLedger` (newest 4 kept),
-  and Android's own account backup, which restores your data on a new phone.
+- **Backups:** manual backups, a weekly (newest 4 kept) or daily (newest 7 kept) automatic backup
+  to `Download/FitLedger`, and Android's own account backup, which restores your data on a new
+  phone. On desktop you can choose the folder, such as one that Dropbox or Syncthing watches.
+  Automatic backups run when you open the app or finish a workout, and a failed one shows a warning.
+- **Safe restores:** a safety copy of your current data is saved before any restore.
 - **Exports:** Strong-format workout CSV, bodyweight, InBody, measurements, diet, and a full JSON
   export.
 - **kg or lb**, light or dark theme.
+
+### Ask Claude
+
+Get advice on your training from **Settings → Ask Claude**. The report covers your goal and
+schedule, consistency, strength changes, weekly volume, joint discomfort and, if you choose, body,
+nutrition and recovery numbers.
+
+1. Choose how many weeks to cover, then share or copy your report.
+2. Send it to the Claude app, or paste it into a new chat at claude.ai. Any Claude plan works.
+3. Ask what you want to know, such as “What should I change over the next 4 weeks?”
+
+FitLedger never sends anything by itself. The report goes only where you send it, and includes health data if you leave that box ticked.
 
 ## License
 

@@ -59,6 +59,7 @@ export default function WorkoutPage({ id, mode }: { id: number; mode: "live" | "
     if (open > 0 && !(await ask(`${open} set${open > 1 ? "s" : ""} not ticked will be dropped. Finish?`))) return;
     const r = await api.finishWorkout(w!.id);
     timer.clear();
+    api.autoBackup(false).catch(() => {}); // a failure is recorded and shown on the Workouts tab
     if (r.differs_from_template && (await ask(`Update the “${w!.name}” template with today's exercises, order, sets and rest times?`))) {
       await api.updateTemplateFromWorkout(w!.id);
     }

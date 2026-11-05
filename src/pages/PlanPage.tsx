@@ -6,6 +6,7 @@ import {
   type MuscleTarget,
   type Phase,
   type Program,
+  type RoutinePreview,
   type ProposedPhase,
   type Schedule,
   type Template,
@@ -17,6 +18,7 @@ import { CATEGORICAL_LIGHT, templateColor, useChartTheme } from "../charts/theme
 import { ExercisePicker } from "../components/ExercisePicker";
 import { TargetRange } from "../charts/TargetRange";
 import { formatClock, formatDate } from "../format";
+import { saveOrShareText } from "../platform";
 
 type Tab = "templates" | "schedule" | "phases" | "targets";
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -168,6 +170,11 @@ function TemplateEditor({ id }: { id: number | "new" }) {
               />
             ))}
             {t.id && (
+              <button className="link-btn" onClick={() => shareRoutine(t.name, t.id!).catch((e) => setError(String(e)))}>
+                Share
+              </button>
+            )}
+            {t.id && (
               <button
                 className="link-btn danger"
                 onClick={() =>
@@ -298,6 +305,106 @@ function TemplateEditor({ id }: { id: number | "new" }) {
         />
       )}
     </div>
+  );
+}
+
+// ---- Sharing routines ------------------------------------------------------------------------------
+
+/** Shares one template, or the active schedule without an id. */
+async function shareRoutine(name: string, templateId?: number) {
+  const file = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "routine";
+  return saveOrShareText(`${file}.fitroutine`, "application/json", await api.routineText(templateId));
+}
+
+function RoutineSharing({ name, canExport, onImported }: { name: string; canExport: boolean; onImported: () => void }) {
+  const [pending, setPending] = useState<{ text: string; preview: RoutinePreview } | null>(null);
+  const [activate, setActivate] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const run = async (f: () => Promise<string | null>) => {
+    setMsg(null);
+    setError(null);
+    try {
+      setMsg(await f());
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+  return (
+    <section className="card">
+      <h2 className="section-title">Share a routine</h2>
+      <p className="muted small">A routine file holds your schedule, exercises, sets and rep ranges. It never includes your logged workouts or weights.</p>
+      <div className="row">
+        <button
+          className="button"
+          disabled={!canExport}
+          onClick={() =>
+            run(async () => {
+              const saved = await shareRoutine(name);
+              return saved && `Saved ${saved}`;
+            })
+          }
+        >
+          Share this schedule
+        </button>
+        <label className="button file-button" style={{ marginTop: 0 }}>
+          Import routine…
+          <input
+            type="file"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f)
+                run(async () => {
+                  const text = await f.text();
+                  setPending({ text, preview: await api.previewRoutine(text) });
+                  setActivate(false);
+                  return null;
+                });
+            }}
+          />
+        </label>
+      </div>
+      {pending && (
+        <div className="restore-confirm">
+          <strong>{pending.preview.name}</strong>
+          {pending.preview.description && <div className="muted small">{pending.preview.description}</div>}
+          <div className="small">
+            Adds {pending.preview.templates.length === 1 ? "1 template" : `${pending.preview.templates.length} templates`}:{" "}
+            {pending.preview.templates.map(([n, count]) => `${n} (${count})`).join(", ")}
+          </div>
+          {pending.preview.new_exercises.length > 0 && <div className="small">New exercises: {pending.preview.new_exercises.join(", ")}</div>}
+          {pending.preview.has_schedule && (
+            <label className="check small">
+              <input type="checkbox" checked={activate} onChange={(e) => setActivate(e.target.checked)} />
+              Make this my active schedule
+            </label>
+          )}
+          <div className="row">
+            <button
+              className="button primary"
+              onClick={() =>
+                run(async () => {
+                  await api.importRoutine(pending.text, activate, today());
+                  const done = `${pending.preview.name} added.`;
+                  setPending(null);
+                  onImported();
+                  return done;
+                })
+              }
+            >
+              Import
+            </button>
+            <button className="button" onClick={() => setPending(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {msg && <p className="success small">{msg}</p>}
+      {error && <p className="error">{error}</p>}
+    </section>
   );
 }
 
@@ -433,6 +540,7 @@ function ScheduleTab() {
         )}
       </section>
 
+      <RoutineSharing name={s.name} canExport={s.id !== null} onImported={load} />
       <section className="card">
         <h2 className="section-title">Starter programs</h2>
         {programs.map((p) => (

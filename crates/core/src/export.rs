@@ -2,6 +2,7 @@
 
 use std::path::Path;
 
+use chrono::NaiveDateTime;
 use rusqlite::Connection;
 use rusqlite::types::ValueRef;
 use serde::Serialize;
@@ -10,6 +11,19 @@ use crate::body::INBODY_FIELDS;
 use crate::db::Db;
 use crate::units::WeightUnit;
 use crate::{Error, Result};
+
+/// Automatic backups: how often (days), and how many to keep. Daily keeps a week of them.
+pub fn auto_backup_policy(setting: Option<&str>) -> (i64, usize) {
+    if setting == Some("1") { (1, 7) } else { (7, 4) }
+}
+
+/// Whether an automatic backup is due. No or unreadable last time counts as due, and so does a
+/// date in the future (clock changed, restored from elsewhere).
+pub fn auto_backup_due(last: Option<&str>, now: NaiveDateTime, every_days: i64) -> bool {
+    last.and_then(|l| NaiveDateTime::parse_from_str(l, TIME_FMT).ok()).is_none_or(|l| l > now || (now - l).num_days() >= every_days)
+}
+
+const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 
 /// Tables with user data, in an order that satisfies foreign keys on import.
 const USER_TABLES: &[&str] = &[
@@ -238,6 +252,26 @@ impl Db {
         backup_info(self.conn())
     }
 
+    /// Remembers how an automatic backup went, so a failure can be shown to the user.
+    pub fn record_auto_backup(&self, outcome: std::result::Result<(), &str>, now: NaiveDateTime) -> Result<()> {
+        match outcome {
+            Ok(()) => {
+                self.set_setting("last_auto_backup_at", &now.format(TIME_FMT).to_string())?;
+                self.set_setting("last_auto_backup_error", "")
+            }
+            Err(e) => self.set_setting("last_auto_backup_error", e),
+        }
+    }
+
+    /// Restores `path` after `snapshot` has saved the current data. If the snapshot fails, nothing
+    /// is restored. Returns what `snapshot` returned (where the copy went).
+    pub fn restore_with_snapshot<T>(&mut self, path: impl AsRef<Path>, snapshot: impl FnOnce(&Db) -> Result<T>) -> Result<T> {
+        Self::inspect_backup(&path)?;
+        let saved = snapshot(self)?;
+        self.restore_from(path)?;
+        Ok(saved)
+    }
+
     /// Replaces all local data with the backup, then upgrades it to the current schema.
     pub fn restore_from(&mut self, path: impl AsRef<Path>) -> Result<BackupInfo> {
         let info = Self::inspect_backup(&path)?;
@@ -256,3 +290,67 @@ impl Db {
 }
 
 use crate::db::MIGRATION_COUNT;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::NaiveDate;
+
+    fn at(day: u32) -> NaiveDateTime {
+        NaiveDate::from_ymd_opt(2026, 11, day).unwrap().and_hms_opt(12, 0, 0).unwrap()
+    }
+
+    fn stamp(day: u32) -> String {
+        at(day).format(TIME_FMT).to_string()
+    }
+
+    #[test]
+    fn interval_setting_is_respected() {
+        assert_eq!(auto_backup_policy(None), (7, 4));
+        assert_eq!(auto_backup_policy(Some("7")), (7, 4));
+        assert_eq!(auto_backup_policy(Some("1")), (1, 7));
+
+        let last = stamp(10);
+        assert!(!auto_backup_due(Some(&last), at(10), 1));
+        assert!(auto_backup_due(Some(&last), at(11), 1));
+        assert!(!auto_backup_due(Some(&last), at(16), 7));
+        assert!(auto_backup_due(Some(&last), at(17), 7));
+        assert!(auto_backup_due(None, at(10), 7));
+        assert!(auto_backup_due(Some("garbage"), at(10), 7));
+        assert!(auto_backup_due(Some(&last), at(9), 7), "a future date counts as due");
+    }
+
+    #[test]
+    fn failures_are_kept_until_a_backup_works() {
+        let db = Db::open_in_memory().unwrap();
+        db.record_auto_backup(Ok(()), at(1)).unwrap();
+        db.record_auto_backup(Err("disk full"), at(8)).unwrap();
+        assert_eq!(db.setting("last_auto_backup_error").unwrap().as_deref(), Some("disk full"));
+        assert_eq!(db.setting("last_auto_backup_at").unwrap(), Some(stamp(1)), "a failure isn't a backup");
+        db.record_auto_backup(Ok(()), at(9)).unwrap();
+        assert_eq!(db.setting("last_auto_backup_error").unwrap().as_deref(), Some(""));
+        assert_eq!(db.setting("last_auto_backup_at").unwrap(), Some(stamp(9)));
+    }
+
+    #[test]
+    fn restore_needs_a_snapshot_first() {
+        let dir = std::env::temp_dir().join(format!("fitledger-snapshot-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let backup = dir.join("backup.fitledger");
+        Db::open_in_memory().unwrap().backup_to(&backup).unwrap();
+
+        let mut db = Db::open_in_memory().unwrap();
+        db.set_setting("mine", "yes").unwrap();
+        let failed = db.restore_with_snapshot(&backup, |_| Err::<(), _>(Error::Format("no space".into())));
+        assert!(failed.is_err());
+        assert_eq!(db.setting("mine").unwrap().as_deref(), Some("yes"), "local data must survive");
+
+        let snapshot = dir.join("snapshot.fitledger");
+        db.restore_with_snapshot(&backup, |db| db.backup_to(&snapshot)).unwrap();
+        assert_eq!(db.setting("mine").unwrap(), None, "restored");
+        let mut check = Db::open_in_memory().unwrap();
+        check.restore_from(&snapshot).unwrap();
+        assert_eq!(check.setting("mine").unwrap().as_deref(), Some("yes"), "the snapshot holds the old data");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+}

@@ -19,6 +19,7 @@ export function TodayCard() {
   const [plan, setPlan] = useState<WeighInPlan | null>(null);
   const [entry, setEntry] = useState("");
   const [days, setDays] = useState<DayHealth[]>([]);
+  const [backupFailed, setBackupFailed] = useState(false);
   const load = () => {
     api.dayHealth().then(setDays);
     api.weighIns(false).then(setRows);
@@ -28,6 +29,7 @@ export function TodayCard() {
   useEffect(() => {
     load();
     loadWeighInPlan().then(setPlan);
+    Promise.all([api.getSetting("auto_backup"), api.getSetting("last_auto_backup_error")]).then(([on, e]) => setBackupFailed(on !== "off" && !!e));
   }, []);
   if (!rows) return null;
 
@@ -53,6 +55,11 @@ export function TodayCard() {
   const recovery = recoveryText(days, today());
   return (
     <section className="card today-card">
+      {backupFailed && (
+        <a className="small warn" href="#/data">
+          Automatic backup failed. Check it ›
+        </a>
+      )}
       <div className="today-grid">
         <a className="today-stat" href="#/body/weight" title={stale ? "No weigh-in for over a week" : undefined}>
           <span className={`small ${stale ? "warn" : "muted"}`}>{last ? parseLocal(last.at).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "Weight"}</span>

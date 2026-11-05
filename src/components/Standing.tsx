@@ -319,8 +319,8 @@ export function WorkoutLifts({
   const { who, loaded } = useNormProfile(bw);
   if (!rows.length || !loaded) return null;
   return (
-    <section className="card">
-      <div className="section-label">How your lifts compare</div>
+    <details className="card">
+      <summary className="section-label">How your lifts compare</summary>
       {!who ? (
         <ProfileHint />
       ) : bw == null ? (
@@ -343,6 +343,6 @@ export function WorkoutLifts({
           <p className="muted small">Tap ⓘ for who each comparison is with and how variations are converted.</p>
         </>
       )}
-    </section>
+    </details>
   );
 }
