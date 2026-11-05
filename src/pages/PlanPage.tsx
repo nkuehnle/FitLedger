@@ -313,7 +313,7 @@ function TemplateEditor({ id }: { id: number | "new" }) {
 /** Shares one template, or the active schedule without an id. */
 async function shareRoutine(name: string, templateId?: number) {
   const file = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "routine";
-  return saveOrShareText(`${file}.fitroutine`, "application/json", await api.routineText(templateId));
+  return saveOrShareText(`${file}.fitroutine.json`, "application/json", await api.routineText(templateId));
 }
 
 function RoutineSharing({ name, canExport, onImported }: { name: string; canExport: boolean; onImported: () => void }) {
@@ -330,10 +330,21 @@ function RoutineSharing({ name, canExport, onImported }: { name: string; canExpo
       setError(String(e));
     }
   };
+  const load = (getText: () => Promise<string>) =>
+    run(async () => {
+      const text = await getText();
+      setPending({ text, preview: await api.previewRoutine(text) });
+      setActivate(false);
+      return null;
+    });
   return (
     <section className="card">
       <h2 className="section-title">Share a routine</h2>
       <p className="muted small">A routine file holds your schedule, exercises, sets and rep ranges. It never includes your logged workouts or weights.</p>
+      <p className="muted small">
+        To get a new routine from Claude, share or copy this schedule into a chat and describe what you want. The file tells Claude how to
+        write one. For a fuller choice of exercises, add resources.json, which lists them all. Then copy Claude's reply and tap Paste routine.
+      </p>
       <div className="row">
         <button
           className="button"
@@ -347,6 +358,43 @@ function RoutineSharing({ name, canExport, onImported }: { name: string; canExpo
         >
           Share this schedule
         </button>
+        <button
+          className="button"
+          disabled={!canExport}
+          onClick={() =>
+            run(async () => {
+              await api.copyText(await api.routineText());
+              return "Routine copied.";
+            })
+          }
+        >
+          Copy
+        </button>
+        <button className="button" onClick={() => load(api.pasteText)}>
+          Paste routine
+        </button>
+        <button
+          className="button"
+          onClick={() =>
+            run(async () => {
+              const saved = await saveOrShareText("resources.json", "application/json", await api.routineResources());
+              return saved && `Saved ${saved}`;
+            })
+          }
+        >
+          Share resources.json
+        </button>
+        <button
+          className="button"
+          onClick={() =>
+            run(async () => {
+              await api.copyText(await api.routineResources());
+              return "resources.json copied.";
+            })
+          }
+        >
+          Copy resources.json
+        </button>
         <label className="button file-button" style={{ marginTop: 0 }}>
           Import routine…
           <input
@@ -355,13 +403,7 @@ function RoutineSharing({ name, canExport, onImported }: { name: string; canExpo
             onChange={(e) => {
               const f = e.target.files?.[0];
               e.target.value = "";
-              if (f)
-                run(async () => {
-                  const text = await f.text();
-                  setPending({ text, preview: await api.previewRoutine(text) });
-                  setActivate(false);
-                  return null;
-                });
+              if (f) load(() => f.text());
             }}
           />
         </label>

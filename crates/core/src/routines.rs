@@ -18,12 +18,27 @@ pub const ROUTINE_FORMAT: &str = "fitledger-routine";
 pub const ROUTINE_VERSION: u32 = 1;
 const MAX_ROUTINE_BYTES: usize = 1_000_000;
 const MAX_CYCLE_DAYS: i64 = 366;
+/// Written into every exported file, so the file alone tells an AI assistant how to write a new one.
+const FOR_AI: &str = "This is a FitLedger workout routine. If the user asks you to change it or write a new one, ask about their goal, \
+training days, equipment and experience if you don't know them, then reply with one complete JSON document in this format. They will paste \
+or import it with Import routine in FitLedger. Keep format and version unchanged, and leave out for_ai, exercise_ids and muscle_ids. \
+templates maps each workout name to its exercises in order. Every slug must come from exercise_ids or the exercises list in resources.json, plus any in custom_exercises. Use a \
+custom exercise only when nothing in those lists fits: give it a slug starting with custom-, a name, and kind (one of weight_reps, \
+bodyweight_reps, assisted_bodyweight, duration, distance_duration, weight_distance), load_mode (total, or per_hand for dumbbell weights \
+given per hand), and primary and secondary lists of ids from muscle_ids or the muscles list in resources.json. sets, rep_min, rep_max and rest_s (seconds) are whole numbers or \
+null. Exercises in a template with the same superset number form a superset; otherwise superset is null. setup_note is text or null. \
+schedule is null, or has kind weekly with exactly 7 days starting on Monday, or kind cycle with cycle_length equal to the number of days. \
+Each day is a template name, or null for rest.";
+
 const EXERCISE_KINDS: [&str; 6] = ["weight_reps", "bodyweight_reps", "assisted_bodyweight", "duration", "distance_duration", "weight_distance"];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Routine {
     pub format: String,
     pub version: u32,
+    /// How to write this format, for an AI assistant. Ignored on import.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub for_ai: Option<String>,
     pub name: String,
     pub description: Option<String>,
     pub schedule: Option<RoutineSchedule>,
@@ -32,6 +47,12 @@ pub struct Routine {
     /// Custom exercises the templates use, so the file works on another device.
     #[serde(default)]
     pub custom_exercises: Vec<RoutineCustomExercise>,
+    /// Built-in exercises a new routine can use. Ignored on import.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exercise_ids: Vec<String>,
+    /// Muscles a custom exercise can list. Ignored on import.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub muscle_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -85,12 +106,17 @@ enum Resolved {
     New(RoutineCustomExercise),
 }
 
-/// Reads and checks a routine file. This doesn't touch the database.
+/// Reads and checks a routine. Text around the JSON is skipped, so an assistant's whole reply can
+/// be pasted. This doesn't touch the database.
 pub fn parse_routine(text: &str) -> Result<Routine> {
     if text.len() > MAX_ROUTINE_BYTES {
         return Err(Error::Format("this file is too large to be a routine".into()));
     }
-    let value: serde_json::Value = serde_json::from_str(text).map_err(|_| Error::Format("not a FitLedger routine".into()))?;
+    let json = match (text.find('{'), text.rfind('}')) {
+        (Some(a), Some(b)) if a < b => &text[a..=b],
+        _ => return Err(Error::Format("not a FitLedger routine".into())),
+    };
+    let value: serde_json::Value = serde_json::from_str(json).map_err(|_| Error::Format("not a FitLedger routine".into()))?;
     if value.get("format").and_then(|f| f.as_str()) != Some(ROUTINE_FORMAT) {
         return Err(Error::Format("not a FitLedger routine".into()));
     }
@@ -167,11 +193,14 @@ fn program_routine(p: &Program) -> Result<Routine> {
     Ok(Routine {
         format: ROUTINE_FORMAT.into(),
         version: ROUTINE_VERSION,
+        for_ai: None,
         name: p.name.clone(),
         description: Some(p.description.clone()),
         schedule: Some(RoutineSchedule { kind: if weekly { "weekly" } else { "cycle" }.into(), cycle_length: p.days.len() as i64, days: p.days.clone() }),
         templates,
         custom_exercises: Vec::new(),
+        exercise_ids: Vec::new(),
+        muscle_ids: Vec::new(),
     })
 }
 
@@ -198,14 +227,17 @@ impl Db {
             names.insert(*id, name);
         }
         let days = s.days.iter().map(|d| d.and_then(|id| names.get(&id).cloned())).collect();
-        Ok(Routine {
+        self.self_describing(Routine {
             format: ROUTINE_FORMAT.into(),
             version: ROUTINE_VERSION,
+            for_ai: None,
             name: s.name,
             description: None,
             schedule: Some(RoutineSchedule { kind: s.kind, cycle_length: s.cycle_length, days }),
             templates,
             custom_exercises: custom.into_values().collect(),
+            exercise_ids: Vec::new(),
+            muscle_ids: Vec::new(),
         })
     }
 
@@ -214,15 +246,73 @@ impl Db {
         let t = self.template(id)?.ok_or_else(|| Error::Format("template not found".into()))?;
         let mut custom = BTreeMap::new();
         let exercises = self.routine_exercises(&t, &mut custom)?;
-        Ok(Routine {
+        self.self_describing(Routine {
             format: ROUTINE_FORMAT.into(),
             version: ROUTINE_VERSION,
+            for_ai: None,
             name: t.name.clone(),
             description: None,
             schedule: None,
             templates: BTreeMap::from([(t.name, exercises)]),
             custom_exercises: custom.into_values().collect(),
+            exercise_ids: Vec::new(),
+            muscle_ids: Vec::new(),
         })
+    }
+
+    /// `resources.json`: every exercise and muscle with the rules and an example, so an AI assistant
+    /// can write a routine with nothing else. This is the user's own list: custom exercises are in it.
+    pub fn routine_resources(&self) -> Result<String> {
+        let exercises: Vec<serde_json::Value> = self
+            .list_exercises(false)?
+            .into_iter()
+            .map(|e| serde_json::json!({ "slug": e.slug, "name": e.name, "equipment": e.equipment, "kind": e.kind, "primary": e.primary, "secondary": e.secondary }))
+            .collect();
+        let mut stmt = self.conn().prepare("SELECT id, name FROM muscle ORDER BY position")?;
+        let muscles: Vec<serde_json::Value> = stmt
+            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
+            .map(|m| m.map(|(id, name)| serde_json::json!({ "id": id, "name": name })))
+            .collect::<rusqlite::Result<_>>()?;
+        let example = |slug: &str, sets| RoutineExercise { slug: slug.into(), sets: Some(sets), rep_min: Some(5), rep_max: Some(8), superset: None, rest_s: Some(120), setup_note: None };
+        let example_routine = Routine {
+            format: ROUTINE_FORMAT.into(),
+            version: ROUTINE_VERSION,
+            for_ai: None,
+            name: "Example".into(),
+            description: Some("Two workouts a week".into()),
+            schedule: Some(RoutineSchedule {
+                kind: "weekly".into(),
+                cycle_length: 7,
+                days: vec![Some("Day A".into()), None, None, Some("Day B".into()), None, None, None],
+            }),
+            templates: BTreeMap::from([
+                ("Day A".to_string(), vec![example("bench-press-barbell", 3)]),
+                ("Day B".to_string(), vec![example("squat-barbell", 3)]),
+            ]),
+            custom_exercises: Vec::new(),
+            exercise_ids: Vec::new(),
+            muscle_ids: Vec::new(),
+        };
+        let resources = serde_json::json!({
+            "format": "fitledger-resources",
+            "version": ROUTINE_VERSION,
+            "how_to_write_a_routine": FOR_AI,
+            "example_routine": example_routine,
+            "muscles": muscles,
+            "exercises": exercises,
+        });
+        Ok(serde_json::to_string_pretty(&resources).expect("json serializes"))
+    }
+
+    /// Adds what an AI assistant needs to write a new routine from this file alone. The user's own
+    /// custom exercises stay out of the list, since the file may be shared.
+    fn self_describing(&self, mut r: Routine) -> Result<Routine> {
+        r.for_ai = Some(FOR_AI.into());
+        r.exercise_ids = self.list_exercises(false)?.into_iter().filter(|e| !e.is_custom).map(|e| e.slug).collect();
+        r.exercise_ids.sort();
+        let mut stmt = self.conn().prepare("SELECT id FROM muscle ORDER BY position")?;
+        r.muscle_ids = stmt.query_map([], |row| row.get(0))?.collect::<rusqlite::Result<_>>()?;
+        Ok(r)
     }
 
     fn routine_exercises(&self, t: &Template, custom: &mut BTreeMap<String, RoutineCustomExercise>) -> Result<Vec<RoutineExercise>> {
@@ -486,10 +576,78 @@ mod tests {
 
     #[test]
     fn routines_hold_no_logged_data() {
-        let text = serde_json::to_string(&source().export_active_routine().unwrap()).unwrap();
+        let mut r = source().export_active_routine().unwrap();
+        (r.for_ai, r.exercise_ids, r.muscle_ids) = (None, Vec::new(), Vec::new());
+        let text = serde_json::to_string(&r).unwrap();
         for word in ["weight_kg", "last_done", "workout"] {
             assert!(!text.contains(word), "{word} in {text}");
         }
+    }
+
+    #[test]
+    fn exported_files_explain_themselves() {
+        let db = source();
+        let r = db.export_active_routine().unwrap();
+        let guide = r.for_ai.as_deref().unwrap();
+        for kind in EXERCISE_KINDS {
+            assert!(guide.contains(kind), "{kind} missing from the guide");
+        }
+        assert!(r.exercise_ids.len() > 100, "{}", r.exercise_ids.len());
+        assert!(r.exercise_ids.iter().all(|s| !s.starts_with("custom-")), "custom exercises stay private");
+        for slug in &r.exercise_ids {
+            assert!(db.exercise_id(slug).unwrap().is_some(), "{slug} can't be imported");
+        }
+        assert!(!r.muscle_ids.is_empty());
+        let size = serde_json::to_string_pretty(&r).unwrap().len();
+        assert!(size * 2 < MAX_ROUTINE_BYTES, "{size} bytes");
+    }
+
+    #[test]
+    fn resources_describe_everything_a_routine_needs() {
+        let db = source();
+        let text = db.routine_resources().unwrap();
+        assert!(text.len() < 2 * MAX_ROUTINE_BYTES, "{} bytes", text.len());
+        let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(v["format"], "fitledger-resources");
+        assert!(v["how_to_write_a_routine"].as_str().unwrap().contains("resources.json"));
+        let slugs: Vec<&str> = v["exercises"].as_array().unwrap().iter().map(|e| e["slug"].as_str().unwrap()).collect();
+        assert!(slugs.len() > 100 && slugs.contains(&"custom-banded-fly"), "{}", slugs.len());
+        assert!(!v["muscles"].as_array().unwrap().is_empty());
+
+        let example = parse_routine(&v["example_routine"].to_string()).unwrap();
+        db.preview_routine(&example).unwrap();
+        assert!(parse_routine(&text).is_err(), "resources aren't a routine");
+    }
+
+    /// The shape the guide asks for, as an assistant would reply, with no guide or id lists.
+    #[test]
+    fn an_assistants_reply_imports() {
+        let db = source();
+        let muscle = db.export_active_routine().unwrap().muscle_ids[0].clone();
+        let reply = format!(
+            r#"Here's your routine:
+
+```json
+{{"format": "fitledger-routine", "version": 1, "name": "Claude's split", "description": "Two days",
+  "schedule": {{"kind": "cycle", "cycle_length": 3, "days": ["Day A", null, "Day B"]}},
+  "templates": {{
+    "Day A": [{{"slug": "bench-press-barbell", "sets": 3, "rep_min": 5, "rep_max": 8, "superset": null, "rest_s": 120, "setup_note": null}}],
+    "Day B": [{{"slug": "custom-sled-drag", "sets": 4, "rep_min": null, "rep_max": null, "superset": null, "rest_s": null, "setup_note": "Heavy"}}]
+  }},
+  "custom_exercises": [{{"slug": "custom-sled-drag", "name": "Sled Drag", "kind": "weight_distance", "load_mode": "total",
+                         "equipment": null, "pattern": null, "default_rest_s": null, "setup_note": null,
+                         "primary": ["{muscle}"], "secondary": []}}]
+}}
+```
+
+Import that and tell me how it goes."#
+        );
+        let r = parse_routine(&reply).unwrap();
+        let mut db = Db::open_in_memory().unwrap();
+        assert_eq!(db.preview_routine(&r).unwrap().new_exercises, vec!["Sled Drag".to_string()]);
+        db.install_routine(&r, true, d()).unwrap();
+        assert_eq!(db.list_templates().unwrap().len(), 2);
+        assert_eq!(db.active_schedule().unwrap().unwrap().cycle_length, 3);
     }
 
     #[test]

@@ -51,8 +51,11 @@ from **Settings → Import, export & backup → Restore…**.
   repeated misses) and a next-time "up / hold / down" note for each exercise.
 - **Templates, routines and starter programs**, with a weekly or custom-length schedule. The
   New workout list puts today's planned workout, or one you missed this week, first.
-- **Shareable routines:** send a schedule or a single template as a `.fitroutine` file, custom
+- **Shareable routines:** send a schedule or a single template as a `.fitroutine.json` file, custom
   exercises included. The file holds your plan only, never your logged workouts or weights.
+- **New routines from Claude:** every routine file explains its own format, so you can share or
+  copy one into a chat and ask for something new. Add `resources.json` for every exercise with its
+  equipment and muscles. Copy the reply, then tap **Paste routine**.
 - **Perform again:** repeat any past workout. When you finish, the app asks whether to update the
   template.
 - **Cardio:** runs, rides and rows with live pace (or speed, or /500 m), average heart rate,

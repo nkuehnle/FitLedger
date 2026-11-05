@@ -728,6 +728,12 @@ fn copy_text(app: tauri::AppHandle, text: String) -> CmdResult<()> {
     app.clipboard().write_text(text).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn paste_text(app: tauri::AppHandle) -> CmdResult<String> {
+    use tauri_plugin_clipboard_manager::ClipboardExt;
+    app.clipboard().read_text().map_err(|e| e.to_string())
+}
+
 /// A routine file: one template, or the active schedule and its templates.
 #[tauri::command]
 fn routine_text(state: State<AppState>, template_id: Option<i64>) -> CmdResult<String> {
@@ -738,6 +744,11 @@ fn routine_text(state: State<AppState>, template_id: Option<i64>) -> CmdResult<S
         };
         Ok(serde_json::to_string_pretty(&r).expect("json serializes"))
     })
+}
+
+#[tauri::command]
+fn routine_resources(state: State<AppState>) -> CmdResult<String> {
+    with(&state, |db| db.routine_resources())
 }
 
 #[tauri::command]
@@ -1350,8 +1361,8 @@ pub fn run() {
             muscle_sets, weekly_muscle_sets, last_trained, workouts_per_period, streak, workout_series, discomfort_points,
             list_templates, save_template, archive_template, template_from_workout, active_schedule, save_schedule,
             suggestion, projected_weekly_sets, muscle_targets, set_muscle_target, current_goal, set_goal, goal_history, progress_health, list_phases, save_phase, delete_phase,
-            propose_from_history, apply_history_proposal, programs, install_program, routine_text, preview_routine, import_routine,
-            progress_report, save_text, share_text, copy_text,
+            propose_from_history, apply_history_proposal, programs, install_program, routine_text, routine_resources, preview_routine, import_routine,
+            progress_report, save_text, share_text, copy_text, paste_text,
             weigh_ins, add_weigh_in, update_weigh_in, update_measurement, delete_weigh_in, inbody_fields, inbody_scans, save_inbody_scan, delete_inbody_scan, norm_reference, exercise_comparison, comparable_exercises,
             preview_inbody_csv, import_inbody_csv, diet_days, save_diet_day, energy_balance,
             body_parts, measurements, add_measurement, delete_measurement,

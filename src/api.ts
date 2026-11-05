@@ -748,6 +748,7 @@ export const api = {
   installProgram: (programId: string, start: string) => invoke<number[]>("install_program", { programId, start }),
   /** A routine file for one template, or for the active schedule without an id. */
   routineText: (templateId?: number) => invoke<string>("routine_text", { templateId: templateId ?? null }),
+  routineResources: () => invoke<string>("routine_resources"),
   previewRoutine: (text: string) => invoke<RoutinePreview>("preview_routine", { text }),
   importRoutine: (text: string, activate: boolean, start: string) => invoke<number[]>("import_routine", { text, activate, start }),
 
@@ -792,6 +793,7 @@ export const api = {
   saveText: (path: string, text: string) => invoke<void>("save_text", { path, text }),
   shareText: (name: string, mime: string, text: string) => invoke<void>("share_text", { name, mime, text }),
   copyText: (text: string) => invoke<void>("copy_text", { text }),
+  pasteText: () => invoke<string>("paste_text"),
   progressReport: (weeks: number, includeBody: boolean) => invoke<string>("progress_report", { weeks, includeBody }),
   dbInfo: () => invoke<BackupInfo>("db_info"),
   saveBase64: (path: string, data: string) => invoke<void>("save_base64", { path, data }),
