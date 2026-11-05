@@ -1,10 +1,45 @@
+import { parseLocal } from "./format";
+
+/** How long after a workout ends a measurement still counts as pumped. */
+export const PUMP_HOURS = 2;
+/** Assumed length of a workout still in progress (no duration yet). */
+const OPEN_WORKOUT_HOURS = 3;
+
 /**
- * A measurement is "pumped" when it was taken after a workout started on the same day; muscles
- * measure bigger for a while after training. Times are local "YYYY-MM-DD HH:MM:SS" strings.
+ * Muscles under each tape measurement (library muscle ids). A part is only pumped by a workout that
+ * trained one of them; parts not listed (waist, abs, body fat) are never counted as pumped.
  */
-export function isPumped(at: string, workoutStarts: string[]): boolean {
-  const day = at.slice(0, 10);
-  return workoutStarts.some((w) => w.slice(0, 10) === day && w <= at);
+export const PUMP_MUSCLES: Record<string, string[]> = {
+  neck: ["neck", "traps"],
+  shoulders: ["front_delts", "side_delts", "rear_delts"],
+  // The tape goes around the back too.
+  chest: ["upper_chest", "lower_chest", "lats", "upper_back"],
+  // The tape goes around the triceps too.
+  left_bicep: ["biceps", "triceps"],
+  right_bicep: ["biceps", "triceps"],
+  left_forearm: ["forearm_flexors", "forearm_extensors"],
+  right_forearm: ["forearm_flexors", "forearm_extensors"],
+  hips: ["glutes"],
+  left_thigh: ["quads", "hamstrings", "adductors", "abductors"],
+  right_thigh: ["quads", "hamstrings", "adductors", "abductors"],
+  left_calf: ["calves"],
+  right_calf: ["calves"],
+};
+
+/**
+ * A measurement of `part` is "pumped" when it was taken during a workout that trained a muscle
+ * under the tape, or within `PUMP_HOURS` after it ended. Times are local "YYYY-MM-DD HH:MM:SS"
+ * strings; durations are seconds.
+ */
+export function isPumped(at: string, part: string, workouts: [string, number | null, string[]][]): boolean {
+  const muscles = PUMP_MUSCLES[part];
+  if (!muscles) return false;
+  const t = +parseLocal(at);
+  return workouts.some(([start, duration, trained]) => {
+    const s = +parseLocal(start);
+    const end = s + (duration ?? OPEN_WORKOUT_HOURS * 3600) * 1000;
+    return t >= s && t <= end + PUMP_HOURS * 3600000 && trained.some((m) => muscles.includes(m));
+  });
 }
 
 interface Reading {

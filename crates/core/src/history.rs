@@ -189,10 +189,22 @@ impl Db {
         Ok(out)
     }
 
-    /// Start times of every workout (including one in progress), oldest first.
-    pub fn workout_starts(&self) -> Result<Vec<String>> {
-        let mut stmt = self.conn().prepare_cached("SELECT started_at_local FROM workout ORDER BY started_at_local")?;
-        let rows = stmt.query_map([], |r| r.get(0))?.collect::<rusqlite::Result<_>>()?;
+    /// Start time, duration (seconds; none while in progress) and the muscles trained (primary or
+    /// secondary, any exercise) of every workout, oldest first.
+    pub fn workout_times(&self) -> Result<Vec<(String, Option<i64>, Vec<String>)>> {
+        let mut stmt = self.conn().prepare_cached(
+            "SELECT w.started_at_local, w.duration_s, group_concat(DISTINCT em.muscle_id)
+             FROM workout w
+             LEFT JOIN workout_exercise we ON we.workout_id = w.id
+             LEFT JOIN exercise_muscle em ON em.exercise_id = we.exercise_id
+             GROUP BY w.id ORDER BY w.started_at_local",
+        )?;
+        let rows = stmt
+            .query_map([], |r| {
+                let muscles: Option<String> = r.get(2)?;
+                Ok((r.get(0)?, r.get(1)?, muscles.map(|m| m.split(',').map(String::from).collect()).unwrap_or_default()))
+            })?
+            .collect::<rusqlite::Result<_>>()?;
         Ok(rows)
     }
 

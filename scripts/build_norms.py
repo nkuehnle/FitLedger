@@ -13,12 +13,19 @@ Sources (download them yourself, they are not kept in git):
            https://stacks.cdc.gov/view/cdc/100478/cdc_100478_DS1.pdf
   --opl    The OpenPowerlifting data (public domain),
            https://openpowerlifting.gitlab.io/opl-csv/files/openpowerlifting-latest.zip
+  --owl    The OpenWeightlifting repository's event_data/ directory (CSV data public domain),
+           https://github.com/euanwm/OpenWeightlifting
+
+strength.json holds every bundled lift as {lift: {age_from, bw_from, male, female}}; each grid cell
+is {n, p} (percentile values) or null under MIN_N lifters. The app builds the same format for the
+CrossFit data on the device (crates/core/src/norms.rs), which isn't bundled.
 
 Needs soffice (Word -> text) and pdftotext.
 """
 
 import argparse
 import csv
+import glob
 import json
 import os
 import re
@@ -118,6 +125,36 @@ def band(x, starts):
     return b
 
 
+def grid(best, age_from):
+    """best: {(lifter, sex, lift, age band): (value, bw band)} -> {lift: {age_from, bw_from, male, female}}."""
+    cells = defaultdict(list)
+    for (_, sex, lift, a), (v, w) in best.items():
+        cells[(lift, sex, a, w)].append(v)
+    out = {}
+    for lift in sorted({k[2] for k in best}):
+        t = {"age_from": age_from, "bw_from": BW_FROM}
+        for sex in ("male", "female"):
+            rows = []
+            for a in range(len(age_from)):
+                row = []
+                for w in range(len(BW_FROM)):
+                    vals = sorted(cells.get((lift, sex, a, w), []))
+                    if len(vals) < MIN_N:
+                        row.append(None)
+                        continue
+                    q = lambda p: vals[min(len(vals) - 1, int(p / 100 * len(vals)))]
+                    row.append({"n": len(vals), "p": [round(q(p), 1) for p in PCTS]})
+                rows.append(row)
+            t[sex] = rows
+        out[lift] = t
+    return out
+
+
+def keep_best(best, key, v, w):
+    if key not in best or v > best[key][0]:
+        best[key] = (v, w)
+
+
 def opl(path):
     # Best lift per lifter, lift and age band, with the bodyweight of that entry.
     best = {}
@@ -132,33 +169,46 @@ def opl(path):
             a, w = band(age, AGE_FROM), band(bw, BW_FROM)
             if a is None or w is None:
                 continue
+            sex = "male" if r["Sex"] == "M" else "female"
             for lift, col in LIFTS.items():
                 v = float(r[col]) if r[col] else 0.0
-                if v <= 0:
+                if v > 0:
+                    keep_best(best, (r["Name"], sex, lift, a), v, w)
+    return grid(best, AGE_FROM)
+
+
+# Adult categories only; the data has no ages, so one band. Youth and junior categories are dropped.
+YOUTH = re.compile(r"youth|junior|\bjun\b|\bjr\b|\bu ?\d\d|under|school|boys|girls|\b1[0-9] ?-|\b\d{1,2} ?& ?under", re.I)
+
+
+def owl(directory):
+    best = {}
+    for path in glob.glob(os.path.join(directory, "**", "*.csv"), recursive=True):
+        with open(path, newline="", encoding="utf-8", errors="replace") as f:
+            rows = csv.reader(f)
+            head = next(rows, None)
+            if not head or len(head) < 14:
+                continue
+            for r in rows:
+                if len(r) < 14:
                     continue
-                k = (r["Name"], r["Sex"], lift, a)
-                if k not in best or v > best[k][0]:
-                    best[k] = (v, w)
-    cells = defaultdict(list)
-    for (_, sex, lift, a), (v, w) in best.items():
-        cells[(lift, sex, a, w)].append(v)
-    out = {"percentiles": PCTS, "age_from": AGE_FROM, "bw_from": BW_FROM, "min_n": MIN_N}
-    for lift in LIFTS:
-        out[lift] = {}
-        for sex, name in (("M", "male"), ("F", "female")):
-            grid = []
-            for a in range(len(AGE_FROM)):
-                row = []
-                for w in range(len(BW_FROM)):
-                    vals = sorted(cells.get((lift, sex, a, w), []))
-                    if len(vals) < MIN_N:
-                        row.append(None)
-                        continue
-                    q = lambda p: vals[min(len(vals) - 1, int(p / 100 * len(vals)))]
-                    row.append({"n": len(vals), "p": [round(q(p), 1) for p in PCTS]})
-                grid.append(row)
-            out[lift][name] = grid
-    return out
+                cat, lifter = r[2], r[3]
+                if YOUTH.search(cat):
+                    continue
+                c = cat.lower()
+                sex = "female" if re.search(r"women|female|\bf\d|\bw\b", c) else "male" if re.search(r"\bmen|male|\bm\d|\bm\b", c) else None
+                try:
+                    bw, sn, cj = float(r[4]), float(r[11]), float(r[12])
+                except ValueError:
+                    continue
+                w = band(bw, BW_FROM)
+                if not sex or w is None:
+                    continue
+                if sn > 0:
+                    keep_best(best, (lifter, sex, "snatch", 0), sn, w)
+                if cj > 0:
+                    keep_best(best, (lifter, sex, "clean_jerk", 0), cj, w)
+    return grid(best, [18])
 
 
 def write(name, data):
@@ -173,10 +223,11 @@ if __name__ == "__main__":
     ap.add_argument("--kelly")
     ap.add_argument("--cdc")
     ap.add_argument("--opl")
+    ap.add_argument("--owl")
     args = ap.parse_args()
     if args.kelly:
         write("body_composition.json", kelly(args.kelly))
     if args.cdc:
         write("body_size.json", cdc(args.cdc))
-    if args.opl:
-        write("strength.json", opl(args.opl))
+    if args.opl and args.owl:
+        write("strength.json", {"percentiles": PCTS, "min_n": MIN_N, "lifts": {**opl(args.opl), **owl(args.owl)}})

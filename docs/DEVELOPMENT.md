@@ -106,10 +106,19 @@ sources, which aren't kept in git (the script's header says where to get them):
   averaged over the three curves; the app doesn't ask for or store ethnicity. DXA "lean" excludes bone, so the lean index uses InBody fat-free mass less 4.5 %.
 - `body_size.json`: CDC 2015–2018 percentiles (5th–95th) by 10-year age band for weight, BMI, waist
   and mid-upper arm; linear between points.
-- `strength.json`: OpenPowerlifting, raw and drug-tested, no DQs, ages 18+; each lifter's best per
-  lift and age band (18–39, 40s, 50s, 60s, 70+), in 10 kg bodyweight bins with at least 100
+- `strength.json`: `{percentiles, min_n, lifts: {lift: {age_from, bw_from, male, female}}}`.
+  OpenPowerlifting (raw and drug-tested, no DQs, ages 18+; squat, bench, deadlift; age bands 18–39,
+  40s, 50s, 60s, 70+) and OpenWeightlifting (adult categories, no ages in the data; snatch,
+  clean & jerk). Each lifter's best per lift and age band, 10 kg bodyweight bins with at least 100
   lifters, blended between the two nearest bins. Tiers: Novice from half the median, Intermediate
   from the 10th percentile, Advanced from the median, Elite from the 90th.
+- CrossFit (not bundled, licence unclear): `download_crossfit` fetches the Kaggle dataset, checks
+  `athletes.csv` against `norms::CROSSFIT_CSV_SHA256`, builds the same table on the device
+  (`norms::crossfit_tables`, lb → kg, implausible values dropped) and keeps only that, in
+  `norms/crossfit.json` in the app data folder. Percentiles only, no tiers.
+- Exercises map to reference lifts in `norms::links`: the same lift, or a variation through
+  "your lift ≈ a + b × reference lift" with the study it comes from. Only ratios with a study are
+  included; per-hand dumbbell weights are doubled first (the studies use both dumbbells).
 
 Age comes from the birth year and the profile (sex, height, birth year) is set on Measure →
 Body comp.

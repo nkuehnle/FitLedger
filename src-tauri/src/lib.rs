@@ -219,8 +219,8 @@ fn set_session_load_mode(state: State<AppState>, workout_exercise_id: i64, mode:
 // ---- History ------------------------------------------------------------------------------------
 
 #[tauri::command]
-fn workout_starts(state: State<AppState>) -> CmdResult<Vec<String>> {
-    with(&state, |db| db.workout_starts())
+fn workout_times(state: State<AppState>) -> CmdResult<Vec<(String, Option<i64>, Vec<String>)>> {
+    with(&state, |db| db.workout_times())
 }
 
 #[tauri::command]
@@ -639,6 +639,72 @@ fn inbody_scans(state: State<AppState>) -> CmdResult<Vec<InBodyScan>> {
 #[tauri::command]
 fn norm_reference(metric: String, who: fitledger_core::norms::Who, values: Vec<f64>) -> Option<fitledger_core::norms::Reference> {
     fitledger_core::norms::reference(&metric, &who, &values)
+}
+
+fn crossfit_path(app: &tauri::AppHandle) -> CmdResult<std::path::PathBuf> {
+    Ok(app.path().app_data_dir().map_err(|e| e.to_string())?.join("norms").join("crossfit.json"))
+}
+
+#[derive(Serialize)]
+struct ExerciseComparison {
+    references: Vec<fitledger_core::norms::Reference>,
+    /// This exercise has a CrossFit comparison that hasn't been downloaded yet.
+    crossfit_offer: bool,
+}
+
+/// Comparisons for an exercise (library slug): estimated 1RMs in kg and most reps, oldest first.
+#[tauri::command]
+fn exercise_comparison(
+    app: tauri::AppHandle,
+    slug: String,
+    who: fitledger_core::norms::Who,
+    weight: Vec<f64>,
+    reps: Vec<f64>,
+) -> CmdResult<ExerciseComparison> {
+    let cf: Option<fitledger_core::norms::LiftTables> =
+        std::fs::read(crossfit_path(&app)?).ok().and_then(|b| serde_json::from_slice(&b).ok());
+    Ok(ExerciseComparison {
+        references: fitledger_core::norms::exercise_references(&slug, &who, &weight, &reps, cf.as_ref()),
+        crossfit_offer: cf.is_none() && fitledger_core::norms::has_crossfit(&slug),
+    })
+}
+
+/// Which of these exercises (library slugs) have any comparison.
+#[tauri::command]
+fn comparable_exercises(slugs: Vec<String>) -> Vec<String> {
+    slugs.into_iter().filter(|s| !fitledger_core::norms::links(s).is_empty()).collect()
+}
+
+/// Downloads the CrossFit athletes' lifts (not bundled: its licence is unclear), checks the file,
+/// and keeps only the percentile tables built from it.
+#[tauri::command]
+async fn download_crossfit(app: tauri::AppHandle) -> CmdResult<()> {
+    use fitledger_core::norms;
+    use sha2::{Digest, Sha256};
+    let path = crossfit_path(&app)?;
+    tauri::async_runtime::spawn_blocking(move || -> CmdResult<()> {
+        let fail = |e: &dyn std::fmt::Display| format!("couldn't download the CrossFit data (needs internet): {e}");
+        let zip = ureq::get(norms::CROSSFIT_URL)
+            .call()
+            .map_err(|e| fail(&e))?
+            .body_mut()
+            .with_config()
+            .limit(64 << 20)
+            .read_to_vec()
+            .map_err(|e| fail(&e))?;
+        let csv = norms::crossfit_csv_from_zip(&zip).map_err(|e| fail(&e))?;
+        let got: String = Sha256::digest(&csv).iter().map(|b| format!("{b:02x}")).collect();
+        if got != norms::CROSSFIT_CSV_SHA256 {
+            return Err(fail(&"the file isn't the version this app expects"));
+        }
+        let tables = norms::crossfit_tables(&csv[..]).map_err(|e| fail(&e))?;
+        std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+        let tmp = path.with_extension("part");
+        std::fs::write(&tmp, serde_json::to_vec(&tables).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -1250,7 +1316,7 @@ pub fn run() {
             preview_strong_workouts, import_strong_workouts, preview_bodyweight, import_bodyweight, preview_measurements, import_measurements,
             name_review, set_name_mapping, remove_name_mapping, confirm_name_mapping, search_exercises,
             per_hand_suspects, set_session_load_mode,
-            history_page, workout_starts, workout_detail, delete_workout, update_workout, rebuild_prs,
+            history_page, workout_times, workout_detail, delete_workout, update_workout, rebuild_prs,
             active_workout, start_workout, add_exercise, remove_exercise, swap_exercise, reorder_exercises,
             add_set, add_warmup_set, set_sticky_note, remove_set, update_set, update_workout_exercise, set_rest_timer, finish_workout,
             previous_for_workout, update_template_from_workout, similar_exercises,
@@ -1259,7 +1325,7 @@ pub fn run() {
             list_templates, save_template, archive_template, template_from_workout, active_schedule, save_schedule,
             suggestion, projected_weekly_sets, muscle_targets, set_muscle_target, current_goal, set_goal, goal_history, progress_health, list_phases, save_phase, delete_phase,
             propose_from_history, apply_history_proposal, programs, install_program,
-            weigh_ins, add_weigh_in, update_weigh_in, update_measurement, delete_weigh_in, inbody_fields, inbody_scans, save_inbody_scan, delete_inbody_scan, norm_reference,
+            weigh_ins, add_weigh_in, update_weigh_in, update_measurement, delete_weigh_in, inbody_fields, inbody_scans, save_inbody_scan, delete_inbody_scan, norm_reference, exercise_comparison, comparable_exercises, download_crossfit,
             preview_inbody_csv, import_inbody_csv, diet_days, save_diet_day, energy_balance,
             body_parts, measurements, add_measurement, delete_measurement,
             export_file, backup_to, inspect_backup, restore_from, db_info, save_base64, copy_png,

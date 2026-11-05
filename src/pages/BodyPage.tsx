@@ -219,11 +219,11 @@ function BodyPartsTab({ part }: { part?: string }) {
   const [rows, setRows] = useState<MeasurementRow[]>([]);
   const [entry, setEntry] = useState("");
   const [editing, setEditing] = useState<MeasurementRow | null>(null);
-  const [workouts, setWorkouts] = useState<string[]>([]);
+  const [workouts, setWorkouts] = useState<[string, number | null, string[]][]>([]);
   const load = () => api.measurements().then(setRows);
   useEffect(() => {
     api.bodyParts().then(setParts);
-    api.workoutStarts().then(setWorkouts);
+    api.workoutTimes().then(setWorkouts);
     load();
   }, []);
   const show = (p: BodyPart, v: number) =>
@@ -251,8 +251,8 @@ function BodyPartsTab({ part }: { part?: string }) {
   const mine = rows.filter((r) => r.part === sel.id);
   const toDisplay = (v: number) => (sel.unit === "cm" && inches ? v / 2.54 : v);
   const unitLabel = sel.unit === "pct" ? "%" : inches ? "in" : "cm";
-  // Tape measurements taken after a workout the same day are "pumped"; charted separately.
-  const pumped = (r: MeasurementRow) => sel.unit === "cm" && isPumped(r.at, workouts);
+  // Tape measurements taken during or just after a workout for those muscles are "pumped"; charted separately.
+  const pumped = (r: MeasurementRow) => isPumped(r.at, sel.id, workouts);
   const point = (r: MeasurementRow) => ({ t: parseLocal(r.at), v: toDisplay(r.value) });
   const rested = mine.filter((r) => !pumped(r));
   const pumpedRows = mine.filter(pumped);
@@ -262,7 +262,7 @@ function BodyPartsTab({ part }: { part?: string }) {
   const partSeries: Series[] = pumpedRows.length
     ? [
         { id: "rested", label: "Not pumped", points: rested.map(point), color: restColor },
-        { id: "pumped", label: "Pumped (after a workout that day)", points: pumpedRows.map(point), color: pumpColor },
+        { id: "pumped", label: "Pumped (within 2 h of training it)", points: pumpedRows.map(point), color: pumpColor },
         ...(pump
           ? [
               {
@@ -321,7 +321,7 @@ function BodyPartsTab({ part }: { part?: string }) {
           <p className="muted small">
             {pump
               ? `Your pump: ${pump.ratio >= 1 ? "+" : "−"}${Math.abs((pump.ratio - 1) * 100).toFixed(1)} % on average (${pump.pairs} pumped readings with a rested one within a week). Diamonds are estimates from that.`
-              : "Pumped means measured after a workout the same day. With 3 or more pumped readings that have a rested one within a week, the chart estimates each from the other."}
+              : "Pumped means measured during or within 2 hours after a workout that trained this muscle. With 3 or more pumped readings that have a rested one within a week, the chart estimates each from the other."}
           </p>
         )}
       </section>

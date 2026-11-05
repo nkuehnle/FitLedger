@@ -616,6 +616,18 @@ export interface NormReference {
   tier_of: (number | null)[];
   population: string;
   source: string;
+  /** Comparison group, mid-sentence ("powerlifting competitors"); empty for body measures. */
+  title: string;
+  /** "kg" or "reps" for lifts. */
+  unit: string;
+  /** How your exercise was converted to the reference lift. */
+  conversion: string | null;
+}
+
+export interface ExerciseComparison {
+  references: NormReference[];
+  /** A CrossFit comparison exists for this exercise but hasn't been downloaded. */
+  crossfit_offer: boolean;
 }
 
 export const api = {
@@ -635,8 +647,8 @@ export const api = {
   searchExercises: (query: string) => invoke<SuggestionView[]>("search_exercises", { query }),
   historyPage: (limit: number, before?: { time: string; id: number }) =>
     invoke<WorkoutCard[]>("history_page", { limit, beforeTime: before?.time, beforeId: before?.id }),
-  /** Start time of every workout, oldest first. */
-  workoutStarts: () => invoke<string[]>("workout_starts"),
+  /** [start time, duration in seconds (null while in progress), muscles trained] of every workout, oldest first. */
+  workoutTimes: () => invoke<[string, number | null, string[]][]>("workout_times"),
   workoutDetail: (id: number) => invoke<WorkoutDetail | null>("workout_detail", { id }),
   counts: () => invoke<Counts>("counts"),
   getSetting: (key: string) => invoke<string | null>("get_setting", { key }),
@@ -740,6 +752,11 @@ export const api = {
   inbodyScans: () => invoke<InBodyScan[]>("inbody_scans"),
   normReference: (metric: string, who: NormWho, values: number[]) =>
     invoke<NormReference | null>("norm_reference", { metric, who, values }),
+  /** Estimated 1RMs (kg) and most reps, oldest first. */
+  exerciseComparison: (slug: string, who: NormWho, weight: number[], reps: number[]) =>
+    invoke<ExerciseComparison>("exercise_comparison", { slug, who, weight, reps }),
+  comparableExercises: (slugs: string[]) => invoke<string[]>("comparable_exercises", { slugs }),
+  downloadCrossfit: () => invoke<void>("download_crossfit"),
   /** On-device OCR of an InBody 580 result sheet image (base64); values in storage units. */
   readInbodyImage: (data: string, massUnit: "kg" | "lb") =>
     invoke<{ measured_at: string | null; values: Record<string, number>; doubtful: string[]; mass_unit: "kg" | "lb" | null }>(

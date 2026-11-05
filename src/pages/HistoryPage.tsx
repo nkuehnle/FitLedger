@@ -19,6 +19,7 @@ import { ShareButton } from "../share/ShareDialog";
 import { StartPanel } from "../components/StartPanel";
 import { distText, paceMode, paceText } from "../cardio";
 import { TodayCard } from "../components/TodayCard";
+import { WorkoutLifts } from "../components/Standing";
 import {
   EQUIPMENT_LABELS,
   formatClock,
@@ -453,6 +454,8 @@ function Detail({ id, summary }: { id: number; summary: boolean }) {
           ))}
         </section>
       )}
+
+      <WorkoutLifts workoutId={w.id} at={w.started_at_local} exercises={w.exercises} />
 
       {(summary || w.muscle_sets.length > 0) && (
         <details className="card" open={summary}>

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { api, type NormReference, type NormWho } from "../api";
+import { api, type ExerciseComparison, type NormReference, type NormWho } from "../api";
+import { usePrefs } from "../App";
+import { parseLocal, toUnit } from "../format";
 
 /** Profile settings used for comparisons: `who` is null until sex and birth year are set. */
 export function useNormProfile(bodyweightKg: number | null = null): { who: NormWho | null; heightCm: number | null; loaded: boolean } {
@@ -27,40 +29,49 @@ export function whoOf(sex: string | null, birthYear: string | null, bodyweightKg
   return { sex, age: new Date().getFullYear() - year, bodyweight_kg: bodyweightKg };
 }
 
+/** Which of these exercise slugs have a comparison (see crates/core/src/norms.rs `links`). */
+export function useComparable(slugs: string[]): Set<string> {
+  const [set, setSet] = useState<Set<string>>(new Set());
+  const key = slugs.join();
+  useEffect(() => {
+    if (slugs.length) api.comparableExercises(slugs).then((s) => setSet(new Set(s)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return set;
+}
+
 export const ordinal = (n: number) => {
   const r = Math.round(n);
   const s = r % 100 >= 11 && r % 100 <= 13 ? "th" : (({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[r % 10] ?? "th");
   return `${r}${s}`;
 };
 
+interface StandingProps {
+  label: string;
+  values: number[];
+  show: (v: number) => string;
+  note?: string;
+}
+
+/** A body measure against its reference data (fetched); see `StandingView`. */
+export function Standing({ metric, who, ...props }: StandingProps & { metric: string; who: NormWho }) {
+  const [ref, setRef] = useState<NormReference | null>(null);
+  const key = JSON.stringify([metric, who, props.values]);
+  useEffect(() => {
+    api.normReference(metric, who, props.values).then(setRef);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return ref ? <StandingView reference={ref} {...props} /> : null;
+}
+
 /**
  * Where a value stands against reference data: the percentile (and tier, for lifts) and a strip
  * showing the spread of the reference group, with the first value (hollow) and the latest (filled).
- * `values` are in storage units (kg, cm), oldest first; `show` formats one for display.
+ * `values` are in storage units (kg, cm, reps), oldest first; `show` formats one for display.
  */
-export function Standing({
-  metric,
-  label,
-  values,
-  who,
-  show,
-  note,
-}: {
-  metric: string;
-  label: string;
-  values: number[];
-  who: NormWho;
-  show: (v: number) => string;
-  note?: string;
-}) {
-  const [ref, setRef] = useState<NormReference | null>(null);
+export function StandingView({ reference: ref, label, values, show, note }: StandingProps & { reference: NormReference }) {
   const [open, setOpen] = useState(false);
-  const key = JSON.stringify([metric, who, values]);
-  useEffect(() => {
-    api.normReference(metric, who, values).then(setRef);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-  if (!ref || !values.length) return null;
+  if (!values.length) return null;
 
   const latest = values[values.length - 1];
   const first = values.length > 1 ? values[0] : null;
@@ -177,9 +188,169 @@ export function Standing({
           {first != null && ` (first: ${show(first)}, hollow dot)`}. Compared with {ref.population}.{" "}
           {tiers.length > 0 &&
             "Tiers: Novice from half the median competitor, Intermediate from the 10th percentile, Advanced from the median, Elite from the 90th. "}
+          {ref.conversion && `${ref.conversion} `}
           {note && `${note} `}Source: {ref.source}.
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * How an exercise compares: every reference group with data (competitors, and CrossFit athletes
+ * once downloaded), converted through a published ratio for variations. `weight` are estimated
+ * 1RMs in kg and `reps` most reps, oldest first.
+ */
+export function ExerciseComparisons({
+  slug,
+  who,
+  weight,
+  reps,
+  label,
+  note,
+  offerDownload = false,
+  perHand = false,
+  dumbbell = false,
+}: {
+  slug: string;
+  who: NormWho;
+  weight: number[];
+  reps: number[];
+  /** Prefix for each strip's label (e.g. the exercise name in a workout summary). */
+  label?: string;
+  note?: string;
+  offerDownload?: boolean;
+  /** Weights logged per dumbbell: compared (and shown) as both together, as the studies measure. */
+  perHand?: boolean;
+  /** A dumbbell exercise: say which way its weights were read. */
+  dumbbell?: boolean;
+}) {
+  weight = perHand ? weight.map((w) => w * 2) : weight;
+  if (dumbbell)
+    note = `${note ?? ""} ${
+      perHand
+        ? "Your weights are per dumbbell, so both together are compared."
+        : "Your weights are read as both dumbbells together (this exercise is set to total load); if you log one dumbbell's weight, turn on “weights per hand” under Edit on the exercise."
+    }`.trim();
+  const { unit } = usePrefs();
+  const [c, setC] = useState<ExerciseComparison | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const key = JSON.stringify([slug, who, weight, reps]);
+  const load = () => api.exerciseComparison(slug, who, weight, reps).then(setC);
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  if (!c) return null;
+  const showKg = (kg: number) => `${Math.round(toUnit(kg, unit))} ${unit}`;
+  async function download() {
+    setBusy("Downloading (13 MB)…");
+    try {
+      await api.downloadCrossfit();
+      setBusy(null);
+      load();
+    } catch (e) {
+      setBusy(String(e));
+    }
+  }
+  return (
+    <>
+      {c.references.map((r) => {
+        const reps_ = r.unit === "reps";
+        const vals = reps_ ? reps : weight;
+        const show = reps_ ? (v: number) => `${Math.round(v)} reps` : perHand ? (v: number) => `${showKg(v)} (both)` : showKg;
+        const head = `${label ? `${label}: ${show(vals[vals.length - 1])} · ` : ""}vs ${r.title}${r.conversion ? " (estimated)" : ""}`;
+        return <StandingView key={r.title} reference={r} label={head} values={vals} show={show} note={note} />;
+      })}
+      {offerDownload && c.crossfit_offer && (
+        <div className="row small">
+          <button className="button small" onClick={download} disabled={busy?.startsWith("Downloading")}>
+            Also compare with CrossFit athletes
+          </button>
+          <span className="muted">{busy ?? "13 MB download, kept on this device. Not bundled: the data's licence is unclear."}</span>
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * Comparisons for the exercises in one workout that have reference data: that session's best
+ * estimated 1RM (or most reps), at your bodyweight nearest the workout.
+ */
+export function WorkoutLifts({
+  workoutId,
+  at,
+  exercises,
+}: {
+  workoutId: number;
+  at: string;
+  exercises: { exercise_id: number | null; exercise_slug: string | null; name: string; load_mode: string; equipment: string | null }[];
+}) {
+  const { unit } = usePrefs();
+  const unique = exercises.filter((e, i) => e.exercise_id && e.exercise_slug && exercises.findIndex((x) => x.exercise_id === e.exercise_id) === i);
+  const comparable = useComparable(unique.map((e) => e.exercise_slug!));
+  const lifts = unique.filter((e) => comparable.has(e.exercise_slug!));
+  const [rows, setRows] = useState<{ id: number; slug: string; name: string; e1rm: number[]; reps: number[]; perHand: boolean; dumbbell: boolean }[]>([]);
+  const [bw, setBw] = useState<number | null>(null);
+  const key = lifts.map((e) => e.exercise_id).join();
+  useEffect(() => {
+    if (!lifts.length) return;
+    Promise.all(lifts.map((e) => api.exerciseStats(e.exercise_id!))).then((stats) =>
+      setRows(
+        lifts.flatMap((e, i) => {
+          const s = stats[i].sessions.find((x) => x.workout_id === workoutId);
+          if (!s) return [];
+          const reps = Math.max(0, ...s.sets.map((x) => x.reps ?? 0));
+          return [
+            {
+              id: e.exercise_id!,
+              slug: e.exercise_slug!,
+              name: e.name,
+              e1rm: s.best_e1rm ? [s.best_e1rm] : [],
+              reps: reps ? [reps] : [],
+              perHand: e.load_mode === "per_hand",
+              dumbbell: e.equipment === "dumbbell",
+            },
+          ];
+        }),
+      ),
+    );
+    api.weighIns(true).then((ws) => {
+      const t = +parseLocal(at);
+      let best: (typeof ws)[number] | null = null;
+      for (const w of ws) if (!best || Math.abs(+parseLocal(w.at) - t) < Math.abs(+parseLocal(best.at) - t)) best = w;
+      setBw(best?.weight_kg ?? null);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workoutId, key]);
+  const { who, loaded } = useNormProfile(bw);
+  if (!rows.length || !loaded) return null;
+  return (
+    <section className="card">
+      <div className="section-label">How your lifts compare</div>
+      {!who ? (
+        <ProfileHint />
+      ) : bw == null ? (
+        <p className="muted small">Log your bodyweight to see strength comparisons.</p>
+      ) : (
+        <>
+          {rows.map((r) => (
+            <ExerciseComparisons
+              key={r.id}
+              slug={r.slug}
+              who={who}
+              weight={r.e1rm}
+              reps={r.reps}
+              label={r.name}
+              perHand={r.perHand}
+              dumbbell={r.dumbbell}
+              note={`This session's best, at your bodyweight nearest the workout (${Math.round(toUnit(bw, unit))} ${unit}).`}
+            />
+          ))}
+          <p className="muted small">Tap ⓘ for who each comparison is with and how variations are converted.</p>
+        </>
+      )}
+    </section>
   );
 }

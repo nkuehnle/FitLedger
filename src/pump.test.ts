@@ -2,15 +2,23 @@ import { describe, expect, it } from "vitest";
 import { isPumped, pumpRatio } from "./pump";
 
 describe("isPumped", () => {
-  const workouts = ["2026-11-02 17:30:00", "2026-11-04 07:00:00"];
-  it("is pumped after a workout the same day", () => {
-    expect(isPumped("2026-11-02 18:45:00", workouts)).toBe(true);
-    expect(isPumped("2026-11-04 07:00:00", workouts)).toBe(true);
+  const workouts: [string, number | null, string[]][] = [
+    ["2026-11-02 17:30:00", 3600, ["biceps", "lats"]],
+    ["2026-11-03 17:30:00", 3600, ["quads", "glutes"]],
+    ["2026-11-04 07:00:00", null, ["triceps"]],
+  ];
+  it("is pumped during or up to two hours after a workout that trained the muscle", () => {
+    expect(isPumped("2026-11-02 17:45:00", "left_bicep", workouts)).toBe(true);
+    expect(isPumped("2026-11-02 20:30:00", "right_bicep", workouts)).toBe(true);
+    expect(isPumped("2026-11-02 19:00:00", "chest", workouts)).toBe(true);
+    expect(isPumped("2026-11-04 08:00:00", "left_bicep", workouts)).toBe(true);
   });
-  it("is not pumped before that day's workout, or on another day", () => {
-    expect(isPumped("2026-11-02 07:10:00", workouts)).toBe(false);
-    expect(isPumped("2026-11-03 09:00:00", workouts)).toBe(false);
-    expect(isPumped("2026-11-05 06:00:00", workouts)).toBe(false);
+  it("is not pumped by a workout for other muscles, hours later, or for the waist", () => {
+    expect(isPumped("2026-11-03 18:30:00", "left_bicep", workouts)).toBe(false);
+    expect(isPumped("2026-11-03 18:30:00", "left_thigh", workouts)).toBe(true);
+    expect(isPumped("2026-11-02 23:30:00", "left_bicep", workouts)).toBe(false);
+    expect(isPumped("2026-11-02 07:10:00", "left_bicep", workouts)).toBe(false);
+    expect(isPumped("2026-11-02 18:00:00", "waist", workouts)).toBe(false);
   });
 });
 
