@@ -75,6 +75,22 @@ function storedTrend(): boolean {
   }
 }
 
+/** The Smoothing slider's position is remembered across charts and restarts too. */
+const SPAN_KEY = "fitledger.chart.span";
+const SPAN_MIN = 0.05;
+const SPAN_MAX = 0.6;
+const SPAN_STEP = 0.01;
+const SPAN_DEFAULT = 0.2;
+function storedSpan(): number {
+  try {
+    const raw = localStorage.getItem(SPAN_KEY);
+    const v = raw === null ? NaN : Number(raw);
+    return Number.isFinite(v) ? Math.min(SPAN_MAX, Math.max(SPAN_MIN, v)) : SPAN_DEFAULT;
+  } catch {
+    return SPAN_DEFAULT;
+  }
+}
+
 const DAY = 86_400_000;
 
 export function TimeSeriesChart(props: TimeSeriesProps) {
@@ -87,7 +103,15 @@ export function TimeSeriesChart(props: TimeSeriesProps) {
       // Storage unavailable: the choice lasts until the chart closes.
     }
   };
-  const [span, setSpan] = useState(0.3);
+  const [span, setSpanState] = useState(storedSpan);
+  const setSpan = (v: number) => {
+    setSpanState(v);
+    try {
+      localStorage.setItem(SPAN_KEY, String(v));
+    } catch {
+      // Storage unavailable: the choice lasts until the chart closes.
+    }
+  };
   const [showBands, setShowBands] = useState(true);
   const [full, setFull] = useState(false);
   const smooth = props.smooth ?? { on: smoothOn, span };
@@ -110,7 +134,15 @@ export function TimeSeriesChart(props: TimeSeriesProps) {
       {controls && smooth.on && hasLine && (
         <label className="span-slider small muted">
           Smoothing
-          <input type="range" min={0.05} max={1} step={0.05} value={span} onChange={(e) => setSpan(Number(e.target.value))} />
+          <input
+            type="range"
+            min={SPAN_MIN}
+            max={SPAN_MAX}
+            step={SPAN_STEP}
+            value={span}
+            onChange={(e) => setSpan(Number(e.target.value))}
+          />
+          <span className="span-value">{Math.round(span * 100)}%</span>
         </label>
       )}
       {controls && (props.bands?.length ?? 0) > 0 && (
