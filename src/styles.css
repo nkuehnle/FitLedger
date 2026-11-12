@@ -110,6 +110,14 @@ input {
   border-radius: 8px;
   padding: 8px 10px;
 }
+/* Sliders skip the text-field box: its padding stopped the thumb short of the
+   ends, so min and max looked unreachable (most visibly on Android). */
+input[type="range"] {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--accent);
+}
 
 .muted {
   color: var(--muted);
@@ -647,6 +655,17 @@ input {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1 1 220px;
+  max-width: 360px;
+}
+.span-slider input {
+  flex: 1;
+  min-width: 0;
+}
+.span-value {
+  min-width: 3ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .chart-legend {
   display: flex;
