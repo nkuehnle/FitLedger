@@ -51,9 +51,9 @@ export default function StatsPage() {
         <MuscleMapSection range={range} phases={phases} names={names} muscles={muscles} />
         <TargetsSection range={range} names={names} />
         <GroupTrendSection range={range} groups={groups} muscles={muscles} phases={phases} />
-        <VolumeResponseSection muscles={muscles} />
         <FrequencySection phases={phases} />
         <DurationSection range={range} phases={phases} />
+        <VolumeResponseSection muscles={muscles} />
         <DiscomfortSection />
       </div>
     </div>
