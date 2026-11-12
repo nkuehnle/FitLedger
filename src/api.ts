@@ -458,6 +458,31 @@ export interface Template {
   last_done?: string | null;
 }
 
+/** A change to one template that the routine review can make for you (see crates/core/src/optimizer.rs). */
+export type RoutineFix =
+  | { kind: "set_sets"; template_id: number; index: number; exercise_id: number; sets: number }
+  | { kind: "swap"; template_id: number; index: number; exercise_id: number; to_exercise_id: number }
+  | { kind: "add"; template_id: number; exercise_id: number; sets: number }
+  | { kind: "move_first"; template_id: number; index: number; exercise_id: number };
+
+export interface RoutineFinding {
+  kind: "under_target" | "over_target" | "once_a_week" | "plateau" | "duplicate" | "late" | "joint";
+  severity: "high" | "medium" | "low";
+  title: string;
+  detail: string;
+  muscle_id: string | null;
+  exercise_id: number | null;
+  template_id: number | null;
+  fix_label: string | null;
+  fix: RoutineFix | null;
+}
+
+export interface RoutineReview {
+  /** Name of the active schedule; null when there isn't one. */
+  schedule: string | null;
+  findings: RoutineFinding[];
+}
+
 export interface Schedule {
   id: number | null;
   name: string;
@@ -717,6 +742,9 @@ export const api = {
   listTemplates: () => invoke<Template[]>("list_templates"),
   saveTemplate: (template: Template) => invoke<number>("save_template", { template }),
   archiveTemplate: (id: number) => invoke<void>("archive_template", { id }),
+  routineReview: () => invoke<RoutineReview>("routine_review", { today: localToday() }),
+  /** Resolves to the template as it was before the change (save it again to undo). */
+  applyRoutineFix: (fix: RoutineFix) => invoke<Template>("apply_routine_fix", { fix }),
   templateFromWorkout: (workoutId: number, name: string) =>
     invoke<{ template_id: number; uncertain_notes: [string, string][] }>("template_from_workout", { workoutId, name }),
   activeSchedule: () => invoke<Schedule | null>("active_schedule"),
