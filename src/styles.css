@@ -269,6 +269,42 @@ input {
   font-size: 1.05rem;
 }
 
+/* Plan → Review */
+.plan-tabs {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.plan-tabs .seg-link {
+  padding: 8px 10px;
+}
+.review-finding .section-title {
+  margin: 2px 0 4px;
+}
+.review-finding p {
+  margin: 0 0 10px;
+}
+.review-finding .button {
+  white-space: normal;
+  text-align: left;
+  height: auto;
+}
+.review-severity {
+  font-weight: 600;
+  color: var(--muted);
+}
+.review-severity.high {
+  color: var(--error);
+}
+.review-severity.medium {
+  color: var(--warn);
+}
+.card.callout.review-applied {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .empty {
   color: var(--muted);
   padding: 24px 0;

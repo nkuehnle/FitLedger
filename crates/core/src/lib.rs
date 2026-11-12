@@ -9,6 +9,7 @@ pub mod library;
 pub mod live;
 pub mod matcher;
 pub mod norms;
+pub mod optimizer;
 pub mod planning;
 pub mod report;
 pub mod review;
@@ -17,6 +18,7 @@ pub mod stats;
 pub mod strong;
 pub mod targets;
 pub mod templates;
+pub mod trend;
 pub mod units;
 pub mod wearables;
 

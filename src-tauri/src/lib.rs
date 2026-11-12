@@ -440,6 +440,18 @@ fn archive_template(state: State<AppState>, id: i64) -> CmdResult<()> {
 }
 
 #[tauri::command]
+fn routine_review(state: State<AppState>, today: String) -> CmdResult<fitledger_core::optimizer::RoutineReview> {
+    let d = date(&today)?;
+    with(&state, |db| db.routine_review(d))
+}
+
+/// Applies one suggested change; returns the template as it was, for undo.
+#[tauri::command]
+fn apply_routine_fix(state: State<AppState>, fix: fitledger_core::optimizer::Fix) -> CmdResult<Template> {
+    with(&state, |db| db.apply_routine_fix(&fix))
+}
+
+#[tauri::command]
 fn template_from_workout(state: State<AppState>, workout_id: i64, name: String) -> CmdResult<CreatedTemplate> {
     with(&state, |db| db.template_from_workout(workout_id, &name))
 }
@@ -1359,7 +1371,7 @@ pub fn run() {
             previous_for_workout, update_template_from_workout, similar_exercises,
             muscles, list_exercises, exercise_info, update_exercise, create_exercise, exercise_stats,
             muscle_sets, weekly_muscle_sets, last_trained, workouts_per_period, streak, workout_series, discomfort_points,
-            list_templates, save_template, archive_template, template_from_workout, active_schedule, save_schedule,
+            list_templates, save_template, archive_template, template_from_workout, active_schedule, save_schedule, routine_review, apply_routine_fix,
             suggestion, projected_weekly_sets, muscle_targets, set_muscle_target, current_goal, set_goal, goal_history, progress_health, list_phases, save_phase, delete_phase,
             propose_from_history, apply_history_proposal, programs, install_program, routine_text, routine_resources, preview_routine, import_routine,
             progress_report, save_text, share_text, copy_text, paste_text,
