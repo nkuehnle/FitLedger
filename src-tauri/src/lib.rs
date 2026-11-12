@@ -650,6 +650,12 @@ fn exercise_comparison(slug: String, who: fitledger_core::norms::Who, weight: Ve
 
 /// Which of these exercises (library slugs) have any comparison.
 #[tauri::command]
+fn strength_balance(state: State<AppState>, today: String) -> CmdResult<fitledger_core::balance::StrengthBalance> {
+    let d = date(&today)?;
+    with(&state, |db| db.strength_balance(d))
+}
+
+#[tauri::command]
 fn comparable_exercises(slugs: Vec<String>) -> Vec<String> {
     slugs.into_iter().filter(|s| !fitledger_core::norms::links(s).is_empty()).collect()
 }
@@ -1363,7 +1369,7 @@ pub fn run() {
             suggestion, projected_weekly_sets, muscle_targets, set_muscle_target, current_goal, set_goal, goal_history, progress_health, list_phases, save_phase, delete_phase,
             propose_from_history, apply_history_proposal, programs, install_program, routine_text, routine_resources, preview_routine, import_routine,
             progress_report, save_text, share_text, copy_text, paste_text,
-            weigh_ins, add_weigh_in, update_weigh_in, update_measurement, delete_weigh_in, inbody_fields, inbody_scans, save_inbody_scan, delete_inbody_scan, norm_reference, exercise_comparison, comparable_exercises,
+            weigh_ins, add_weigh_in, update_weigh_in, update_measurement, delete_weigh_in, inbody_fields, inbody_scans, save_inbody_scan, delete_inbody_scan, norm_reference, exercise_comparison, comparable_exercises, strength_balance,
             preview_inbody_csv, import_inbody_csv, diet_days, save_diet_day, energy_balance,
             body_parts, measurements, add_measurement, delete_measurement,
             export_file, backup_to, inspect_backup, restore_from, db_info, save_base64, copy_png,

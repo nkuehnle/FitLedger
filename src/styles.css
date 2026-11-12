@@ -1444,6 +1444,65 @@ label.check {
   font-variant-numeric: tabular-nums;
 }
 
+/* Progress → Strength balance: bars from a centre line */
+.balance-scale,
+.balance-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 1.2fr) 2fr 44px;
+  align-items: center;
+  gap: 8px;
+}
+.balance-scale {
+  grid-template-columns: 1fr auto 1fr;
+  margin: 0 52px 2px calc(37.5% + 4px);
+}
+.balance-scale span:last-child {
+  text-align: right;
+}
+.balance-rows {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.balance-rows .pair-end {
+  margin-bottom: 8px;
+}
+.balance-row {
+  width: 100%;
+  padding: 3px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+button.balance-row {
+  cursor: pointer;
+}
+.balance-track {
+  position: relative;
+  height: 8px;
+  background: var(--surface-2);
+  border-radius: 4px;
+}
+.balance-track::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  border-left: 1px solid var(--muted);
+}
+.balance-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 4px;
+}
+.balance-lifts {
+  padding: 0 0 6px;
+}
+
 .calendar-nav {
   display: flex;
   align-items: center;

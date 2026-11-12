@@ -1,3 +1,4 @@
+pub mod balance;
 pub mod body;
 pub mod cardio;
 pub mod db;
