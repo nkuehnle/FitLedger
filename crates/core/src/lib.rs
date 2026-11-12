@@ -11,12 +11,14 @@ pub mod matcher;
 pub mod norms;
 pub mod planning;
 pub mod report;
+pub mod response;
 pub mod review;
 pub mod routines;
 pub mod stats;
 pub mod strong;
 pub mod targets;
 pub mod templates;
+pub mod trend;
 pub mod units;
 pub mod wearables;
 

@@ -8,6 +8,7 @@ import {
   type MuscleStat,
   type MuscleTarget,
   type PeriodCount,
+  type ResponsePoint,
   type Phase,
   type Streak,
   type WeekMuscleSets,
@@ -26,7 +27,7 @@ import { ProgressHeader } from "../components/ProgressHeader";
 import { TimeSeriesChart, type Band } from "../charts/TimeSeriesChart";
 import { useChartTheme } from "../charts/theme";
 import { ShareButton } from "../share/ShareDialog";
-import { formatVolume, parseLocal, toUnit } from "../format";
+import { formatDate, formatVolume, parseLocal, toUnit } from "../format";
 
 export default function StatsPage() {
   const [range, setRange] = useSavedRange("progress");
@@ -50,6 +51,7 @@ export default function StatsPage() {
         <MuscleMapSection range={range} phases={phases} names={names} muscles={muscles} />
         <TargetsSection range={range} names={names} />
         <GroupTrendSection range={range} groups={groups} muscles={muscles} phases={phases} />
+        <VolumeResponseSection muscles={muscles} />
         <FrequencySection phases={phases} />
         <DurationSection range={range} phases={phases} />
         <DiscomfortSection />
@@ -585,6 +587,58 @@ function GroupTrendSection({
         zero
         height={200}
       />
+    </section>
+  );
+}
+
+/** Your own dose-response: weekly sets for a muscle against the strength change they came with. */
+function VolumeResponseSection({ muscles }: { muscles: Muscle[] }) {
+  const [muscle, setMuscle] = useState("lower_chest");
+  const [points, setPoints] = useState<ResponsePoint[]>([]);
+  useEffect(() => {
+    api.volumeResponse(muscle).then(setPoints);
+  }, [muscle]);
+  const kinds = [
+    ["gain", "Gain"],
+    ["maintain", "Maintain"],
+    ["cut", "Cut"],
+    [null, "No goal set"],
+  ] as const;
+  const series = kinds
+    .map(([goal, label]) => ({
+      id: String(goal),
+      label,
+      points: points
+        .filter((p) => p.goal === goal)
+        .map((p) => ({
+          x: Math.round(p.sets_per_week * 10) / 10,
+          y: Math.round(p.change * 1000) / 10,
+          label: `${formatDate(p.start)} – ${formatDate(p.end)} · ${p.sets_per_week.toFixed(1)} sets/wk`,
+        })),
+    }))
+    .filter((s) => s.points.length > 0);
+  return (
+    <section className="card">
+      <h2 className="section-title">Sets vs strength gained</h2>
+      <select className="select" value={muscle} onChange={(e) => setMuscle(e.target.value)}>
+        {muscles.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.name}
+          </option>
+        ))}
+      </select>
+      {points.length < 3 ? (
+        <p className="muted small">This needs about four months of training a muscle to show a pattern.</p>
+      ) : (
+        <>
+          <ScatterChart series={series} xLabel="Sets a week" yLabel="Strength change, %" height={260} />
+          <p className="muted small">
+            Each dot is 6 weeks: the muscle's average weekly sets, and how much stronger (or weaker) its main exercises were than in the 6
+            weeks before, in the same rep ranges. Dots further right that aren't higher are sets that didn't pay. Food and sleep changed
+            between dots too, so read it as a pattern, not proof.
+          </p>
+        </>
+      )}
     </section>
   );
 }
