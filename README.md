@@ -78,6 +78,19 @@ from **Settings → Import, export & backup → Restore…**.
   muscle-by-week grid and a recovery view.
 - **Training calendar**, streaks, workout duration and weekly minutes of cardio.
 - **Program phases** (e.g. "Upper / Lower", "Cut") drawn as bands behind every chart.
+- **Routine review** (Plan → Review): checks the schedule you follow against your weekly set
+  targets and recent training: muscles short of or over their sets, lifts that have stopped
+  moving, near-identical exercises, lifts slipping late in a session and joints that keep
+  complaining. Most findings come with a change you can apply to the template in one tap, and undo.
+- **Is it growing?** The Health view also says whether each muscle is likely growing, holding or
+  slipping, from strength in the same rep range, the tape, InBody lean mass, weekly sets and food,
+  with how sure it is and the evidence behind it.
+- **Strength balance:** which muscles and movements are strong or weak next to the rest of you,
+  and left against right from the tape and InBody.
+- **Sets vs strength gained:** for each muscle, the weekly sets of every 6 weeks against the
+  strength they came with.
+- **Fatigue check:** a note on Today when several lifts slip together and your watch's HRV,
+  resting heart rate or sleep agree.
 
 ### Body
 
@@ -97,7 +110,12 @@ from **Settings → Import, export & backup → Restore…**.
 
 ### Charts
 
-- **Raw or Trend** (LOESS smoothing). Your choice is remembered. Raw shows every data point.
+- **Raw or Trend** (LOESS smoothing). Your choice and the amount of smoothing are remembered. Raw
+  shows every data point.
+- **Goal pace** on the bodyweight chart: where your weight would be at the goal's target rate.
+- **Compare phases:** every cut, gain or maintenance from its own first day, on one chart, and how
+  much of a phase's weight change was lean and how much fat.
+- **Plateaus** marked on each exercise's estimated 1RM chart.
 - **Full screen,** turned sideways on a phone. Drag along the line to read the date and value.
 
 ### Sharing
