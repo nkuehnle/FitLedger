@@ -3,6 +3,25 @@
 //! What counts as success depends on the goal: on a cut, holding strength and size is a win;
 //! on a gain, they should be going up.
 
+//!
+//! Alongside that goal-relative score, `Growth` answers a plainer question: is this muscle likely
+//! growing, holding or slipping? It weighs the same evidence without regard to the goal, says how
+//! sure it is, and says when the signals disagree. The weights and cut-offs are choices made
+//! here, not from a study:
+//!
+//! - **Outcomes** (what the muscle did): strength within a rep range (weight 1; ½ when the rep
+//!   ranges changed and only overall bests could be compared), tape (1; ½ when bodyweight moved
+//!   the same way by 0.5 % a month or more, since fat moves a tape too) and InBody segmental lean
+//!   mass (¾: impedance readings swing with hydration).
+//! - **Conditions** (what it was given): weekly sets against the target (½) and food: the goal
+//!   phase, and logged protein under 1.6 g/kg (Morton et al. 2018, Br J Sports Med, found no
+//!   further gain above about that) (½). The goal is the one in force three weeks ago, the middle
+//!   of the stretch the outcomes cover.
+//!
+//! Each piece of evidence leans from −1 (shrinking) to 1 (growing); the weighted mean gives the
+//! verdict at ±`VERDICT`. Confidence is high with two or more outcomes that agree, medium with
+//! one or with two that disagree, low with none.
+
 use std::collections::HashMap;
 
 use chrono::{Duration, NaiveDate};
@@ -10,7 +29,7 @@ use serde::Serialize;
 
 use crate::db::Db;
 use crate::planning::Goal;
-use crate::stats::e1rm;
+use crate::trend::{SessionBest, matched_change, median};
 use crate::Result;
 
 #[derive(Debug, Clone, Serialize)]
@@ -28,6 +47,79 @@ pub struct MuscleHealth {
     /// Weighted mean of the signals; None when there's no data at all.
     pub score: Option<f64>,
     pub signals: Vec<HealthSignal>,
+    /// Whether the muscle is likely growing, whatever the goal; None without any evidence.
+    pub growth: Option<Growth>,
+}
+
+/// One piece of evidence about growth.
+#[derive(Debug, Clone, Serialize)]
+pub struct Evidence {
+    /// "strength" | "size" | "lean_mass" (outcomes), "volume" | "food" (conditions)
+    pub kind: &'static str,
+    /// -1 (points to shrinking) … 1 (points to growing).
+    pub lean: f64,
+    pub weight: f64,
+    pub outcome: bool,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Growth {
+    /// "growing" | "holding" | "slipping"
+    pub verdict: &'static str,
+    /// "high" | "medium" | "low"
+    pub confidence: &'static str,
+    /// Weighted mean of the evidence, -1 … 1.
+    pub score: f64,
+    /// False when two outcomes point in opposite directions.
+    pub agree: bool,
+    pub evidence: Vec<Evidence>,
+}
+
+/// |score| at or above this is growing / slipping; in between is holding.
+pub const VERDICT: f64 = 0.25;
+/// An outcome leaning less than this either way counts as flat when checking agreement.
+const FLAT: f64 = 0.2;
+/// Daily protein per kg of bodyweight below which food counts against growth.
+const PROTEIN_G_PER_KG: f64 = 1.6;
+
+/// The verdict from the evidence. `None` when there is none.
+pub fn growth(evidence: Vec<Evidence>) -> Option<Growth> {
+    let total: f64 = evidence.iter().map(|e| e.weight).sum();
+    if total <= 0.0 {
+        return None;
+    }
+    let score = evidence.iter().map(|e| e.lean * e.weight).sum::<f64>() / total;
+    let outcomes: Vec<&Evidence> = evidence.iter().filter(|e| e.outcome).collect();
+    let up = outcomes.iter().any(|e| e.lean >= FLAT);
+    let down = outcomes.iter().any(|e| e.lean <= -FLAT);
+    let agree = !(up && down);
+    let confidence = match outcomes.len() {
+        0 => "low",
+        1 => "medium",
+        _ if agree => "high",
+        _ => "medium",
+    };
+    let verdict = if score >= VERDICT {
+        "growing"
+    } else if score <= -VERDICT {
+        "slipping"
+    } else {
+        "holding"
+    };
+    Some(Growth { verdict, confidence, score, agree, evidence })
+}
+
+/// How weekly sets bear on growth: nothing to grow from at 0 sets, neutral at the minimum, a
+/// small plus inside the range.
+pub fn volume_lean(per_week: f64, (lo, hi): (f64, f64)) -> f64 {
+    if lo > 0.0 && per_week < lo {
+        clamp(per_week / lo - 1.0)
+    } else if per_week <= hi {
+        0.25
+    } else {
+        0.0
+    }
 }
 
 const VOLUME_WEEKS: i64 = 4;
@@ -141,41 +233,61 @@ impl Db {
             .map(|m| (m.muscle_id, m.sets / VOLUME_WEEKS as f64))
             .collect();
 
-        // Strength: per primary exercise, best e1RM in the last 6 weeks vs the 6 before.
-        let formula = self.formula()?;
+        // Strength: per primary exercise, the last 6 weeks against the 6 before, within rep ranges
+        // where the two stretches share one.
         let split = today - Duration::days(STRENGTH_DAYS);
         let start = (split - Duration::days(STRENGTH_DAYS)).to_string();
-        let mut best: HashMap<i64, (f64, f64)> = HashMap::new();
-        for s in self.work_sets(None, Some(&start), Some(&today.to_string()))? {
-            let (Some(ex), Some(w), Some(r)) = (s.exercise_id, s.weight_kg, s.reps) else { continue };
-            if r > 15 || s.set_type == "warmup" {
-                continue;
-            }
-            let Some(e) = e1rm(w, r, formula) else { continue };
-            let b = best.entry(ex).or_insert((0.0, 0.0));
-            if s.date() > split {
-                b.1 = b.1.max(e);
-            } else {
-                b.0 = b.0.max(e);
-            }
-        }
-        let mut strength: HashMap<String, Vec<f64>> = HashMap::new();
+        let bests = self.session_bests(Some(&start), Some(&today.to_string()))?;
+        // Per muscle: (change, compared within a rep range) for each exercise.
+        let mut strength: HashMap<String, Vec<(f64, bool)>> = HashMap::new();
         for (ex, muscles) in self.muscle_map()? {
-            let Some(&(before, now)) = best.get(&ex) else { continue };
-            if before <= 0.0 || now <= 0.0 {
-                continue;
-            }
-            // A jump this big means the exercise or its logging changed, not the muscle.
-            let change = now / before - 1.0;
-            if change.abs() > 0.25 {
-                continue;
-            }
+            let Some(sessions) = bests.get(&ex) else { continue };
+            let (before, after): (Vec<SessionBest>, Vec<SessionBest>) = sessions.iter().cloned().partition(|x| x.date <= split);
+            let Some(c) = matched_change(&before, &after) else { continue };
             for (m, primary) in muscles {
                 if primary {
-                    strength.entry(m).or_default().push(change);
+                    strength.entry(m).or_default().push((c.change, c.matched));
                 }
             }
         }
+
+        // Food: the goal phase, and protein when it's logged on 10+ of the last 28 days.
+        let bodyweight = self.bodyweight_at(today)?;
+        let weight_trend = match (bodyweight, self.bodyweight_at(today - Duration::days(56))?) {
+            (Some(now), Some(then)) if then > 0.0 => Some((now / then - 1.0) / (56.0 / 30.4)),
+            _ => None,
+        };
+        let since = (today - Duration::days(27)).to_string();
+        let protein: Vec<f64> = self
+            .diet_days()?
+            .into_iter()
+            .filter(|d| d.date.as_str() >= since.as_str() && d.date.as_str() <= today.to_string().as_str())
+            .filter_map(|d| d.protein_g)
+            .collect();
+        let protein_per_kg = match bodyweight {
+            Some(bw) if protein.len() >= 10 && bw > 0.0 => Some(protein.iter().sum::<f64>() / protein.len() as f64 / bw),
+            _ => None,
+        };
+        let food = {
+            // The goal in the middle of the stretch the outcomes cover, not one set last week.
+            let (mut lean, mut detail) = match self.goal_on(today - Duration::days(STRENGTH_DAYS / 2))?.map(|g| g.goal) {
+                Some(Goal::Gain) => (0.3, "Eating to gain over these weeks".to_string()),
+                Some(Goal::Maintain) => (0.0, "Eating at maintenance over these weeks".to_string()),
+                Some(Goal::Cut) => (-0.3, "Eating to lose over these weeks, which makes growth unlikely".to_string()),
+                None => (0.0, String::new()),
+            };
+            if let Some(p) = protein_per_kg {
+                if !detail.is_empty() {
+                    detail.push_str("; ");
+                }
+                detail.push_str(&format!("protein averages {p:.1} g per kg"));
+                if p < PROTEIN_G_PER_KG {
+                    lean -= 0.3;
+                    detail.push_str(&format!(", under the {PROTEIN_G_PER_KG} that growth is fed by"));
+                }
+            }
+            (!detail.is_empty()).then(|| Evidence { kind: "food", lean: clamp(lean), weight: 0.5, outcome: false, detail })
+        };
 
         // Tape measurements and InBody lean mass, by part/field.
         let mut tape: HashMap<String, Vec<(NaiveDate, f64)>> = HashMap::new();
@@ -199,47 +311,74 @@ impl Db {
         let muscles: Vec<String> = stmt.query_map([], |r| r.get(0))?.collect::<rusqlite::Result<_>>()?;
         for muscle in muscles {
             let mut signals = Vec::new();
+            let mut evidence = Vec::new();
             let v = weekly.get(&muscle).copied().unwrap_or(0.0);
             // A muscle with no minimum that isn't trained (e.g. neck) says nothing.
             if let Some(&(lo, hi)) = targets.get(&muscle).filter(|t| t.1 > 0.0 && (t.0 > 0.0 || v > 0.0)) {
-                signals.push(HealthSignal {
-                    kind: "volume",
-                    score: volume_score(v, (lo, hi)),
-                    detail: format!("{v:.1} sets/week over the last 4 weeks (target {lo}–{hi})"),
-                });
+                let detail = format!("{v:.1} sets/week over the last 4 weeks (target {lo}–{hi})");
+                signals.push(HealthSignal { kind: "volume", score: volume_score(v, (lo, hi)), detail: detail.clone() });
+                evidence.push(Evidence { kind: "volume", lean: volume_lean(v, (lo, hi)), weight: 0.5, outcome: false, detail });
             }
             if let Some(ch) = strength.get(&muscle).filter(|c| !c.is_empty()) {
-                let mut c = ch.clone();
-                c.sort_by(f64::total_cmp);
-                let median = c[c.len() / 2];
-                signals.push(HealthSignal {
+                let matched = ch.iter().filter(|c| c.1).count();
+                let mut c: Vec<f64> = ch.iter().map(|c| c.0).collect();
+                let mid = median(&mut c).expect("not empty");
+                let n = c.len();
+                let detail = format!(
+                    "estimated 1RM {} vs the previous 6 weeks ({n} {}{})",
+                    pct(mid),
+                    if n == 1 { "exercise" } else { "exercises" },
+                    if matched * 2 >= n { ", same rep ranges" } else { "; rep ranges changed, so less sure" }
+                );
+                signals.push(HealthSignal { kind: "strength", score: strength_score(mid, goal), detail: detail.clone() });
+                evidence.push(Evidence {
                     kind: "strength",
-                    score: strength_score(median, goal),
-                    detail: format!("estimated 1RM {} vs the previous 6 weeks ({} exercises)", pct(median), c.len()),
+                    lean: clamp(mid / 0.03),
+                    weight: if matched * 2 >= n { 1.0 } else { 0.5 },
+                    outcome: true,
+                    detail,
                 });
             }
             let parts = tape_parts(&muscle);
             let series: Vec<_> = parts.iter().filter_map(|p| tape.get(*p).cloned()).collect();
             if let Some(ch) = monthly_change(&series, today) {
                 let waist = parts == ["waist"];
+                let detail = format!("{} {} a month", parts[0].replace("left_", "").replace('_', " "), pct(ch));
                 signals.push(HealthSignal {
                     kind: "size",
                     score: if waist { waist_score(ch, goal) } else { size_score(ch, goal) },
-                    detail: format!("{} {} a month", parts[0].replace("left_", "").replace('_', " "), pct(ch)),
+                    detail: detail.clone(),
                 });
+                // A waist says more about fat than about abs.
+                if !waist {
+                    // Bodyweight moving the same way means some of the change is fat.
+                    let with_weight = weight_trend.is_some_and(|w| w.abs() >= 0.005 && (w > 0.0) == (ch > 0.0));
+                    evidence.push(Evidence {
+                        kind: "size",
+                        lean: clamp(ch / 0.01),
+                        weight: if with_weight { 0.5 } else { 1.0 },
+                        outcome: true,
+                        detail: match weight_trend {
+                            Some(w) if with_weight => format!("{detail}, while bodyweight went {} a month, so part of it is fat", pct(w)),
+                            _ => detail,
+                        },
+                    });
+                }
             }
             let series: Vec<_> = lean_fields(&muscle).iter().filter_map(|f| lean.get(*f).cloned()).collect();
             if let Some(ch) = monthly_change(&series, today) {
-                signals.push(HealthSignal {
-                    kind: "lean_mass",
-                    score: size_score(ch, goal),
-                    detail: format!("InBody lean mass {} a month", pct(ch)),
-                });
+                let detail = format!("InBody lean mass {} a month", pct(ch));
+                signals.push(HealthSignal { kind: "lean_mass", score: size_score(ch, goal), detail: detail.clone() });
+                evidence.push(Evidence { kind: "lean_mass", lean: clamp(ch / 0.01), weight: 0.75, outcome: true, detail });
             }
             let weight = |k: &str| if k == "strength" { 1.5 } else { 1.0 };
             let total: f64 = signals.iter().map(|s| weight(s.kind)).sum();
             let score = (total > 0.0).then(|| signals.iter().map(|s| s.score * weight(s.kind)).sum::<f64>() / total);
-            out.push(MuscleHealth { muscle_id: muscle, score, signals });
+            // Food alone says nothing about one muscle.
+            if !evidence.is_empty() {
+                evidence.extend(food.clone());
+            }
+            out.push(MuscleHealth { muscle_id: muscle, score, signals, growth: growth(evidence) });
         }
         Ok(out)
     }
@@ -260,6 +399,35 @@ mod tests {
         assert_eq!(waist_score(-0.01, Some(Goal::Cut)), 1.0);
         assert!(waist_score(-0.01, Some(Goal::Maintain)) < 0.5);
         assert_eq!(size_score(-0.02, Some(Goal::Cut)), 0.0);
+    }
+
+    fn ev(kind: &'static str, lean: f64, weight: f64, outcome: bool) -> Evidence {
+        Evidence { kind, lean, weight, outcome, detail: String::new() }
+    }
+
+    #[test]
+    fn growth_verdict_and_confidence() {
+        assert!(growth(vec![]).is_none());
+        // Strength and tape both up, enough sets, eating to gain: growing, and sure of it.
+        let g = growth(vec![ev("strength", 1.0, 1.0, true), ev("size", 0.6, 1.0, true), ev("volume", 0.25, 0.5, false), ev("food", 0.3, 0.5, false)]).unwrap();
+        assert_eq!((g.verdict, g.confidence, g.agree), ("growing", "high", true));
+        // Strength up but the tape down: they disagree, so less sure, and it nets out as holding.
+        let g = growth(vec![ev("strength", 0.8, 1.0, true), ev("size", -0.8, 1.0, true)]).unwrap();
+        assert_eq!((g.verdict, g.confidence, g.agree), ("holding", "medium", false));
+        // Only sets and food to go on: a guess.
+        let g = growth(vec![ev("volume", -1.0, 0.5, false), ev("food", -0.3, 0.5, false)]).unwrap();
+        assert_eq!((g.verdict, g.confidence), ("slipping", "low"));
+        // One flat outcome and one rising agree.
+        let g = growth(vec![ev("strength", 0.1, 1.0, true), ev("lean_mass", 0.9, 0.75, true)]).unwrap();
+        assert_eq!((g.verdict, g.confidence, g.agree), ("growing", "high", true));
+    }
+
+    #[test]
+    fn sets_as_a_condition_for_growth() {
+        assert_eq!(volume_lean(0.0, (10.0, 20.0)), -1.0);
+        assert_eq!(volume_lean(5.0, (10.0, 20.0)), -0.5);
+        assert_eq!(volume_lean(12.0, (10.0, 20.0)), 0.25);
+        assert_eq!(volume_lean(25.0, (10.0, 20.0)), 0.0);
     }
 
     #[test]

@@ -594,6 +594,18 @@ export interface MuscleHealth {
   /** -1 (going badly) … 1 (going well); null without data. */
   score: number | null;
   signals: { kind: "volume" | "strength" | "size" | "lean_mass"; score: number; detail: string }[];
+  /** Whether the muscle is likely growing, whatever the goal; null without evidence. */
+  growth: MuscleGrowth | null;
+}
+
+export interface MuscleGrowth {
+  verdict: "growing" | "holding" | "slipping";
+  confidence: "high" | "medium" | "low";
+  /** -1 (shrinking) … 1 (growing). */
+  score: number;
+  /** False when two outcomes (strength, tape, lean mass) point in opposite directions. */
+  agree: boolean;
+  evidence: { kind: "strength" | "size" | "lean_mass" | "volume" | "food"; lean: number; weight: number; outcome: boolean; detail: string }[];
 }
 
 function localToday(): string {
