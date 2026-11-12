@@ -646,6 +646,18 @@ export interface BackupInfo {
 export const MISSING_WEIGHT_UNIT = "MISSING_WEIGHT_UNIT";
 
 /** Who a measurement is compared with (see crates/core/src/norms.rs). */
+/** Which muscles and movements are strong or weak relative to the rest of you (crates/core/src/balance.rs). */
+export interface StrengthBalance {
+  /** Why there's nothing to compare: profile not set, no weigh-ins, or under three recent lifts with reference data. */
+  missing: "profile" | "bodyweight" | "lifts" | null;
+  /** Most behind first. `balance` is against the middle of all your lifts: −0.1 = 10 % behind. */
+  lifts: { exercise_id: number; name: string; pattern: string | null; ratio: number; balance: number; percentile: number | null; rough: boolean }[];
+  muscles: { muscle_id: string; balance: number; standing: "behind" | "even" | "ahead"; lifts: string[] }[];
+  pairs: { a: string; b: string; a_balance: number; b_balance: number; a_lifts: number; b_lifts: number }[];
+  /** `diff` is (right − left) ÷ their mean; tape values are cm, InBody values kg. */
+  sides: { label: string; source: "tape" | "inbody"; left: number; right: number; diff: number; notable: boolean; date: string }[];
+}
+
 export interface NormWho {
   sex: "male" | "female";
   age: number;
@@ -805,6 +817,7 @@ export const api = {
   exerciseComparison: (slug: string, who: NormWho, weight: number[], reps: number[]) =>
     invoke<NormReference[]>("exercise_comparison", { slug, who, weight, reps }),
   comparableExercises: (slugs: string[]) => invoke<string[]>("comparable_exercises", { slugs }),
+  strengthBalance: () => invoke<StrengthBalance>("strength_balance", { today: localToday() }),
   /** On-device OCR of an InBody 580 result sheet image (base64); values in storage units. */
   readInbodyImage: (data: string, massUnit: "kg" | "lb") =>
     invoke<{ measured_at: string | null; values: Record<string, number>; doubtful: string[]; mass_unit: "kg" | "lb" | null }>(

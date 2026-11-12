@@ -23,6 +23,7 @@ import { RangePicker, inRange, isoDate, phaseRange, presetRange, today, type Ran
 import { ScatterChart } from "../charts/ScatterChart";
 import { TargetRange } from "../charts/TargetRange";
 import { ProgressHeader } from "../components/ProgressHeader";
+import { StrengthBalanceSection } from "../components/StrengthBalance";
 import { TimeSeriesChart, type Band } from "../charts/TimeSeriesChart";
 import { useChartTheme } from "../charts/theme";
 import { ShareButton } from "../share/ShareDialog";
@@ -50,6 +51,7 @@ export default function StatsPage() {
         <MuscleMapSection range={range} phases={phases} names={names} muscles={muscles} />
         <TargetsSection range={range} names={names} />
         <GroupTrendSection range={range} groups={groups} muscles={muscles} phases={phases} />
+        <StrengthBalanceSection names={names} />
         <FrequencySection phases={phases} />
         <DurationSection range={range} phases={phases} />
         <DiscomfortSection />
