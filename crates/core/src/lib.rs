@@ -13,6 +13,7 @@ pub mod norms;
 pub mod optimizer;
 pub mod planning;
 pub mod report;
+pub mod response;
 pub mod review;
 pub mod routines;
 pub mod stats;

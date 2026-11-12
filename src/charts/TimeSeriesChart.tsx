@@ -33,8 +33,31 @@ export interface Marker {
   label: string;
 }
 
+/** A target range fanning out from a starting value (see `goalCorridors`). Rates are per day. */
+export interface CorridorBand {
+  from: Date;
+  to: Date;
+  v0: number;
+  lo: number;
+  hi: number;
+  /** Half-height at the start: 0 for a wedge, more for a band. */
+  half: number;
+  label: string;
+}
+
+/** A level that a stretch of points didn't beat (see `plateaus`). */
+export interface PlateauLine {
+  from: Date;
+  to: Date;
+  v: number;
+}
+
 export interface TimeSeriesProps {
   series: Series[];
+  /** Target ranges drawn behind the lines (the bodyweight goal's rate). */
+  corridors?: CorridorBand[];
+  /** Plateaus drawn as dashed levels (exercise charts). */
+  plateaus?: PlateauLine[];
   /** Appended to y labels, e.g. "lb". */
   unit?: string;
   yFormat?: (v: number) => string;
@@ -317,6 +340,20 @@ export function TimeSeriesSvg(props: TimeSeriesProps & { smooth: { on: boolean; 
       );
     });
     let [y0, y1] = d3.extent(all, (p) => p.v) as [number, number];
+    // Make room for the visible part of each corridor, but never so much that the data is squashed.
+    const room = (y1 - y0 || 1) * 0.25;
+    let [c0, c1] = [y0, y1];
+    for (const c of props.corridors ?? []) {
+      const [a, b] = [Math.max(+c.from, +t0), Math.min(+c.to, +t1)];
+      if (b <= a) continue;
+      for (const t of [a, b]) {
+        const days = (t - +c.from) / DAY;
+        c0 = Math.min(c0, c.v0 - c.half + c.lo * days);
+        c1 = Math.max(c1, c.v0 + c.half + c.hi * days);
+      }
+    }
+    y0 = Math.max(c0, y0 - room);
+    y1 = Math.min(c1, y1 + room);
     if (props.zero) y0 = Math.min(0, y0);
     if (props.diverging) {
       let m = Math.max(Math.abs(y0), Math.abs(y1)) || 1;
@@ -335,7 +372,7 @@ export function TimeSeriesSvg(props: TimeSeriesProps & { smooth: { on: boolean; 
       .range([height - margin.bottom, margin.top]);
     return { x, y, smoothed };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.series, props.smooth.on, props.smooth.span, width, height, props.zero, props.diverging, props.yStep, props.hideNumbers, fs]);
+  }, [props.series, props.corridors, props.smooth.on, props.smooth.span, width, height, props.zero, props.diverging, props.yStep, props.hideNumbers, fs]);
 
   if (!model) {
     return (
@@ -451,6 +488,30 @@ export function TimeSeriesSvg(props: TimeSeriesProps & { smooth: { on: boolean; 
           </text>
         ))}
 
+        {Boolean(props.corridors?.length || props.plateaus?.length) && (
+          <clipPath id={`${gid}-plot`}>
+            <rect x={margin.left} y={margin.top} width={width - margin.left - margin.right} height={height - margin.top - margin.bottom} />
+          </clipPath>
+        )}
+        {props.corridors?.map((c, i) => {
+          const days = (+c.to - +c.from) / DAY;
+          const [xa, xb] = [x(c.from), x(c.to)];
+          return (
+            <g key={i} clipPath={`url(#${gid}-plot)`}>
+              <path
+                d={`M${xa},${y(c.v0 + c.half)} L${xb},${y(c.v0 + c.half + c.hi * days)} L${xb},${y(c.v0 - c.half + c.lo * days)} L${xa},${y(c.v0 - c.half)} Z`}
+                fill={theme.categorical[2]}
+                fillOpacity={0.16}
+                stroke={theme.categorical[2]}
+                strokeOpacity={0.5}
+                strokeWidth={fs}
+              >
+                <title>{c.label}</title>
+              </path>
+            </g>
+          );
+        })}
+
         {div && (
           <>
             <defs>
@@ -542,6 +603,18 @@ export function TimeSeriesSvg(props: TimeSeriesProps & { smooth: { on: boolean; 
               {pts.map(([px, py], i) => (
                 <circle key={i} cx={px} cy={py} r={r} fill={hollow ? theme.surface : color} stroke={hollow ? color : "none"} strokeWidth={2 * fs} />
               ))}
+            </g>
+          );
+        })}
+
+        {props.plateaus?.map((p, i) => {
+          const [xa, xb] = [Math.max(x(p.from), margin.left), Math.min(x(p.to), width - margin.right)];
+          if (xb <= xa) return null;
+          return (
+            <g key={i} clipPath={`url(#${gid}-plot)`}>
+              <line x1={xa} x2={xb} y1={y(p.v)} y2={y(p.v)} stroke={theme.categorical[1]} strokeWidth={1.5 * fs} strokeDasharray={`${5 * fs} ${4 * fs}`}>
+                <title>Plateau</title>
+              </line>
             </g>
           );
         })}

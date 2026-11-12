@@ -32,7 +32,7 @@ export function ScatterChart({
     ro.observe(wrap.current);
     return () => ro.disconnect();
   }, []);
-  const m = { top: 10, right: 40, bottom: 34, left: 8 };
+  const m = { top: 24, right: 40, bottom: 34, left: 8 };
   const all = series.flatMap((s) => s.points);
   const x = d3
     .scaleLinear()
@@ -79,7 +79,7 @@ export function ScatterChart({
         <text x={(m.left + width - m.right) / 2} y={height - 3} fontSize={11} fill={theme.muted} textAnchor="middle">
           {xLabel}
         </text>
-        <text x={width - 4} y={m.top} fontSize={11} fill={theme.muted} textAnchor="end" dy="-0.2em">
+        <text x={width - 4} y={m.top - 12} fontSize={11} fill={theme.muted} textAnchor="end" dy="-0.2em">
           {yLabel}
         </text>
         {series.map((s, si) =>

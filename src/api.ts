@@ -350,6 +350,17 @@ export interface WeekMuscleSets {
   volume_kg: number;
 }
 
+/** One stretch of training for a muscle: its weekly sets and the strength change it came with (crates/core/src/response.rs). */
+export interface ResponsePoint {
+  start: string;
+  end: string;
+  sets_per_week: number;
+  /** Against the stretch before: 0.02 = 2 % stronger. */
+  change: number;
+  exercises: number;
+  goal: Goal | null;
+}
+
 export interface LastTrained {
   muscle_id: string;
   last_date: string | null;
@@ -757,6 +768,7 @@ export const api = {
   exerciseStats: (id: number) => invoke<ExerciseStats>("exercise_stats", { id }),
   muscleSets: (from?: string, to?: string) => invoke<MuscleStat[]>("muscle_sets", { from, to }),
   weeklyMuscleSets: (from?: string, to?: string) => invoke<WeekMuscleSets[]>("weekly_muscle_sets", { from, to }),
+  volumeResponse: (muscleId: string) => invoke<ResponsePoint[]>("volume_response", { muscleId, today: localToday() }),
   lastTrained: (today: string) => invoke<LastTrained[]>("last_trained", { today }),
   workoutsPerPeriod: (monthly: boolean, today: string) => invoke<PeriodCount[]>("workouts_per_period", { monthly, today }),
   streak: (today: string) => invoke<Streak>("streak", { today }),
