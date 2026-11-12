@@ -3,6 +3,7 @@ pub mod cardio;
 pub mod db;
 pub mod exercises;
 pub mod export;
+pub mod fatigue;
 pub mod health;
 pub mod history;
 pub mod library;
@@ -17,6 +18,7 @@ pub mod stats;
 pub mod strong;
 pub mod targets;
 pub mod templates;
+pub mod trend;
 pub mod units;
 pub mod wearables;
 
