@@ -186,6 +186,18 @@ export interface DayHealth {
   steps: number | null;
 }
 
+/** Whether many lifts are down at once and the watch agrees (crates/core/src/fatigue.rs). */
+export interface FatigueReport {
+  level: "ok" | "watch" | "deload";
+  /** One sentence; empty when level is "ok". */
+  summary: string;
+  lifts_down: number;
+  lifts_tracked: number;
+  /** Most down first; `change` is the last two weeks against the six before (−0.03 = 3 % down). */
+  lifts: { exercise_id: number; name: string; change: number; down: boolean }[];
+  recovery: { kind: "hrv" | "resting_hr" | "sleep"; off: boolean; detail: string }[];
+}
+
 /** What a watch / health app import added. */
 export interface WearableSummary {
   weights: number;
@@ -729,6 +741,7 @@ export const api = {
   /** A Garmin .fit file or a .zip of them, base64. */
   importFit: (data: string) => invoke<WearableSummary>("import_fit", { data }),
   dayHealth: () => invoke<DayHealth[]>("day_health"),
+  fatigue: () => invoke<FatigueReport>("fatigue", { today: localToday() }),
   /** Automatic backup to Download/FitLedger (Android) if due, or now with `force`; returns where it went. */
   autoBackup: (force: boolean) => invoke<string | null>("auto_backup", { force }),
 

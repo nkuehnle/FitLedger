@@ -2126,6 +2126,16 @@ a.start-row {
 .today-recovery {
   margin-top: 4px;
 }
+.today-fatigue {
+  margin-top: 8px;
+}
+.today-fatigue summary {
+  cursor: pointer;
+}
+.today-fatigue ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
 .today-grid {
   display: grid;
   grid-template-columns: 1fr 1fr auto;

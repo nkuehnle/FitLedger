@@ -4,6 +4,7 @@ pub mod cardio;
 pub mod db;
 pub mod exercises;
 pub mod export;
+pub mod fatigue;
 pub mod health;
 pub mod history;
 pub mod library;

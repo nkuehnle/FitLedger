@@ -1015,6 +1015,12 @@ fn import_fit(state: State<AppState>, data: String) -> CmdResult<fitledger_core:
 }
 
 #[tauri::command]
+fn fatigue(state: State<AppState>, today: String) -> CmdResult<fitledger_core::fatigue::FatigueReport> {
+    let d = date(&today)?;
+    with(&state, |db| db.fatigue(d))
+}
+
+#[tauri::command]
 fn day_health(state: State<AppState>) -> CmdResult<Vec<fitledger_core::wearables::DayHealth>> {
     with(&state, |db| db.day_health())
 }
@@ -1392,7 +1398,7 @@ pub fn run() {
             body_parts, measurements, add_measurement, delete_measurement,
             export_file, backup_to, inspect_backup, restore_from, db_info, save_base64, copy_png,
             rest_android_status, rest_android_rest, rest_android_clear, weigh_in_reminder, auto_backup, cardio_sessions, log_cardio, health_connect_status, health_connect_connect, health_connect_open,
-            health_connect_sync, import_fit, day_health,
+            health_connect_sync, import_fit, day_health, fatigue,
             share_export, share_backup, share_png, save_png_to_photos, read_inbody_image, stage_backup,
             counts, get_setting, set_setting,
         ])

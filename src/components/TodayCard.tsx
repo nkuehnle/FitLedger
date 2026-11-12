@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type DayHealth, type EnergyPoint, type WeighInRow } from "../api";
+import { api, type DayHealth, type EnergyPoint, type FatigueReport, type WeighInRow } from "../api";
 import { recoveryText } from "../recovery";
 import { usePrefs } from "../App";
 import { today } from "../charts/RangePicker";
@@ -20,8 +20,10 @@ export function TodayCard() {
   const [entry, setEntry] = useState("");
   const [days, setDays] = useState<DayHealth[]>([]);
   const [backupFailed, setBackupFailed] = useState(false);
+  const [fatigue, setFatigue] = useState<FatigueReport | null>(null);
   const load = () => {
     api.dayHealth().then(setDays);
+    api.fatigue().then(setFatigue);
     api.weighIns(false).then(setRows);
     api.energyBalance(14).then(setEnergy);
     api.currentGoal().then(setGoal);
@@ -127,6 +129,30 @@ export function TodayCard() {
         </div>
       </div>
       {recovery && <div className="small muted today-recovery">{recovery}</div>}
+      {fatigue && fatigue.level !== "ok" && (
+        <details className="small today-fatigue">
+          <summary>
+            <strong className="warn">{fatigue.level === "deload" ? "Time for a lighter week?" : "Running a little flat"}</strong>{" "}
+            {fatigue.summary}
+          </summary>
+          <ul>
+            {fatigue.lifts
+              .filter((l) => l.down)
+              .map((l) => (
+                <li key={l.exercise_id}>
+                  <a href={`#/exercises/${l.exercise_id}`}>{l.name}</a> <span className="muted">−{Math.abs(l.change * 100).toFixed(1)}%</span>
+                </li>
+              ))}
+            {fatigue.recovery
+              .filter((r) => !r.off)
+              .map((r) => (
+                <li key={r.kind} className="muted">
+                  As usual: {r.detail}
+                </li>
+              ))}
+          </ul>
+        </details>
+      )}
     </section>
   );
 }

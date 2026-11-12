@@ -27,6 +27,7 @@ import { ProfileHint, Standing, useNormProfile } from "../components/Standing";
 import { ShareButton } from "../share/ShareDialog";
 import { formatDate, formatTime, nowLocal, parseLocal, toUnit } from "../format";
 import { GOAL_TEXT, goalStatus, type GoalInfo } from "../goal";
+import { PhaseSplitCard } from "../components/PhaseSplitCard";
 import { fileToBase64 } from "../platform";
 import { isPumped, pumpRatio } from "../pump";
 
@@ -537,6 +538,7 @@ function BodyweightTab() {
           )}
         </section>
       )}
+      <PhaseSplitCard rows={rows} />
       <WeighInList rows={rows} unit={unit} onChanged={load} />
     </>
   );
