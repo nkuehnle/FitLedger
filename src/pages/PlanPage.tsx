@@ -342,8 +342,8 @@ function RoutineSharing({ name, canExport, onImported }: { name: string; canExpo
       <h2 className="section-title">Share a routine</h2>
       <p className="muted small">A routine file holds your schedule, exercises, sets and rep ranges. It never includes your logged workouts or weights.</p>
       <p className="muted small">
-        To get a new routine from Claude, share or copy this schedule into a chat and describe what you want. The file tells Claude how to
-        write one. For a fuller choice of exercises, add resources.json, which lists them all. Then copy Claude's reply and tap Paste routine.
+        Each file explains its own format. resources.json lists every exercise with its equipment and muscles. To add a routine from text, copy it
+        and tap Paste routine.
       </p>
       <div className="row">
         <button

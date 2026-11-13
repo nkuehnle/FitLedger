@@ -51,6 +51,8 @@ export interface TimeSeriesProps {
   showControls?: boolean;
   /** Include zero on the y axis (counts, volume). */
   zero?: boolean;
+  /** A dashed target line, always in view. */
+  goalLine?: number;
   /** Values above 0 and below 0 mean different things (surplus/deficit): keep 0 centred and
    *  color the two sides with the diverging pair, labelled. */
   diverging?: { aboveLabel: string; belowLabel: string };
@@ -286,6 +288,10 @@ export function TimeSeriesSvg(props: TimeSeriesProps & { smooth: { on: boolean; 
     });
     let [y0, y1] = d3.extent(all, (p) => p.v) as [number, number];
     if (props.zero) y0 = Math.min(0, y0);
+    if (props.goalLine != null) {
+      y0 = Math.min(y0, props.goalLine);
+      y1 = Math.max(y1, props.goalLine);
+    }
     if (props.diverging) {
       let m = Math.max(Math.abs(y0), Math.abs(y1)) || 1;
       if (props.yStep) m = Math.ceil(m / props.yStep) * props.yStep;
@@ -303,7 +309,7 @@ export function TimeSeriesSvg(props: TimeSeriesProps & { smooth: { on: boolean; 
       .range([height - margin.bottom, margin.top]);
     return { x, y, smoothed };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.series, props.smooth.on, props.smooth.span, width, height, props.zero, props.diverging, props.yStep, props.hideNumbers, fs]);
+  }, [props.series, props.smooth.on, props.smooth.span, width, height, props.zero, props.goalLine, props.diverging, props.yStep, props.hideNumbers, fs]);
 
   if (!model) {
     return (
@@ -514,6 +520,17 @@ export function TimeSeriesSvg(props: TimeSeriesProps & { smooth: { on: boolean; 
           );
         })}
 
+        {props.goalLine != null && (
+          <line
+            x1={margin.left}
+            x2={width - margin.right}
+            y1={y(props.goalLine)}
+            y2={y(props.goalLine)}
+            stroke={theme.muted}
+            strokeWidth={1.5}
+            strokeDasharray="6 4"
+          />
+        )}
         {props.markers?.map((m, i) => (
           <g key={i}>
             <path

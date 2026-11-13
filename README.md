@@ -53,9 +53,9 @@ from **Settings → Import, export & backup → Restore…**.
   New workout list puts today's planned workout, or one you missed this week, first.
 - **Shareable routines:** send a schedule or a single template as a `.fitroutine.json` file, custom
   exercises included. The file holds your plan only, never your logged workouts or weights.
-- **New routines from Claude:** every routine file explains its own format, so you can share or
-  copy one into a chat and ask for something new. Add `resources.json` for every exercise with its
-  equipment and muscles. Copy the reply, then tap **Paste routine**.
+- **Routine files you can read:** every routine file explains its own format, and `resources.json`
+  lists every exercise with its equipment and muscles. To add a routine from text, copy it and tap
+  **Paste routine**.
 - **Perform again:** repeat any past workout. When you finish, the app asks whether to update the
   template.
 - **Cardio:** runs, rides and rows with live pace (or speed, or /500 m), average heart rate,
@@ -78,6 +78,15 @@ from **Settings → Import, export & backup → Restore…**.
   muscle-by-week grid and a recovery view.
 - **Training calendar**, streaks, workout duration and weekly minutes of cardio.
 - **Program phases** (e.g. "Upper / Lower", "Cut") drawn as bands behind every chart.
+- **Lifts:** each regular lift marked moving, flat or sliding against your last 6 weeks, judged
+  by your goal, so holding strength on a cut counts as a win. Tap one for your last session, your
+  rating and any suggestion. Suggestions never override your own rating.
+- **Week finish line:** the Workouts tab tells you when a muscle is on course to miss its weekly
+  set target.
+- **Lift goals:** set a target estimated 1RM with an optional date, see it on the chart, and see
+  when your trend reaches it.
+- **What worked:** compare any two phases side by side, including sessions, sets, strength and
+  bodyweight, plus what else overlapped them.
 
 ### Body
 
@@ -126,21 +135,9 @@ from **Settings → Import, export & backup → Restore…**.
   phone. On desktop you can choose the folder, such as one that Dropbox or Syncthing watches.
   Automatic backups run when you open the app or finish a workout, and a failed one shows a warning.
 - **Safe restores:** a safety copy of your current data is saved before any restore.
-- **Exports:** Strong-format workout CSV, bodyweight, InBody, measurements, diet, and a full JSON
-  export.
+- **Exports:** Strong-format workout CSV, bodyweight, InBody, measurements, diet, a full JSON
+  export, and a written progress report covering 4, 8 or 12 weeks.
 - **kg or lb**, light or dark theme.
-
-### Ask Claude
-
-Get advice on your training from **Settings → Ask Claude**. The report covers your goal and
-schedule, consistency, strength changes, weekly volume, joint discomfort and, if you choose, body,
-nutrition and recovery numbers.
-
-1. Choose how many weeks to cover, then share or copy your report.
-2. Send it to the Claude app, or paste it into a new chat at claude.ai. Any Claude plan works.
-3. Ask what you want to know, such as “What should I change over the next 4 weeks?”
-
-FitLedger never sends anything by itself. The report goes only where you send it, and includes health data if you leave that box ticked.
 
 ## License
 

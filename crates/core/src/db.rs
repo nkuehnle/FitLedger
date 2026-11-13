@@ -316,6 +316,14 @@ CREATE TABLE day_health (
 "#, r#"
 -- Migration 8: the comparisons no longer take a reference group; forget any saved one.
 DELETE FROM setting WHERE key = 'norm_group';
+"#, r#"
+-- Migration 9: a target estimated 1RM per exercise, with an optional date.
+CREATE TABLE lift_goal (
+    exercise_id INTEGER PRIMARY KEY REFERENCES exercise (id) ON DELETE CASCADE,
+    target_kg   REAL NOT NULL,
+    target_date TEXT,
+    created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 "#];
 
 pub(crate) const MIGRATION_COUNT: usize = MIGRATIONS.len();

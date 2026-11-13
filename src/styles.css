@@ -1259,6 +1259,10 @@ label.check {
   border-color: var(--accent);
   color: var(--on-accent);
 }
+.intent-btn.last:not(.active) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
 .exercise-more {
   display: flex;
   flex-direction: column;
@@ -1918,6 +1922,66 @@ select.select,
 }
 .start-more {
   margin-top: 8px;
+}
+.start-finish {
+  display: block;
+  margin-top: 8px;
+  color: inherit;
+  text-decoration: none;
+}
+.lift-row {
+  border-top: 1px solid var(--border);
+}
+.lift-row:first-of-type {
+  border-top: 0;
+}
+.lift-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lift-name {
+  flex: 1;
+  min-width: 0;
+}
+.lift-state {
+  white-space: nowrap;
+}
+.lift-state.state-moving {
+  color: var(--ok);
+}
+.lift-state.state-sliding {
+  color: var(--error);
+}
+.lift-state.state-check {
+  color: var(--warn);
+}
+.lift-state.state-flat {
+  color: var(--muted);
+}
+.lift-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 10px;
+}
+.phase-compare th {
+  font-weight: 400;
+  text-align: left;
+  color: var(--muted);
+}
+.phase-compare {
+  width: 100%;
+  margin: 10px 0 6px;
 }
 .start-more summary {
   color: var(--accent);

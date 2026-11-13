@@ -1,5 +1,6 @@
 pub mod body;
 pub mod cardio;
+pub mod coach;
 pub mod db;
 pub mod exercises;
 pub mod export;

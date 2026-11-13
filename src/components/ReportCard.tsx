@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { api } from "../api";
 import { today } from "../charts/RangePicker";
-import { CLAUDE_GUIDE, CLAUDE_GUIDE_PRIVACY } from "../claudeGuide";
 import { saveOrShareText } from "../platform";
 
 const WEEKS = [4, 8, 12];
 
-/** A progress report to hand to Claude. The app itself never sends it anywhere. */
-export function ClaudeCard() {
+/** A written progress report to share or copy. */
+export function ReportCard() {
   const [weeks, setWeeks] = useState(8);
   const [body, setBody] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
@@ -23,13 +22,11 @@ export function ClaudeCard() {
   };
   return (
     <section className="card">
-      <h2 className="section-title">Ask Claude</h2>
-      <ol className="small">
-        {CLAUDE_GUIDE.map((step) => (
-          <li key={step}>{step}</li>
-        ))}
-      </ol>
-      <p className="muted small">{CLAUDE_GUIDE_PRIVACY}</p>
+      <h2 className="section-title">Progress report</h2>
+      <p className="muted small">
+        FitLedger never sends anything by itself. The report goes only where you send it, and includes health data if you leave that box
+        ticked.
+      </p>
       <div className="segmented">
         {WEEKS.map((w) => (
           <button key={w} className={weeks === w ? "active" : ""} onClick={() => setWeeks(w)}>

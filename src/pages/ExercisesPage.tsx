@@ -1,15 +1,73 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type CardioSession, type ExerciseInfo, type ExerciseStats, type Muscle, type Phase, type WeighInRow } from "../api";
+import { api, type CardioSession, type ExerciseInfo, type ExerciseStats, type LiftGoal, type Muscle, type Phase, type WeighInRow } from "../api";
 import { navigate, usePrefs } from "../App";
 import { RangePicker, inRange, useSavedRange } from "../charts/RangePicker";
 import { CardioActivity } from "./CardioPage";
 import { TimeSeriesChart, type Band, type Marker, type Point } from "../charts/TimeSeriesChart";
 import { ExerciseEditor } from "../components/ExerciseEditor";
+import { goalText } from "../components/LiftsCard";
 import { ShareButton } from "../share/ShareDialog";
 import { EQUIPMENT_LABELS, formatDate, formatVolume, formatWeight, parseLocal, toUnit } from "../format";
 import { prText } from "./HistoryPage";
 import { ProgressHeader } from "../components/ProgressHeader";
 import { ExerciseComparisons, ProfileHint, useComparable, useNormProfile } from "../components/Standing";
+
+const KG_PER_LB = 0.45359237;
+
+/** One line under the est. 1RM chart: the goal and its pace, or a way to set one. */
+function LiftGoalRow({ exerciseId, goal, onChanged }: { exerciseId: number; goal: LiftGoal | null; onChanged: () => void }) {
+  const { unit } = usePrefs();
+  const [editing, setEditing] = useState(false);
+  const [target, setTarget] = useState("");
+  const [by, setBy] = useState("");
+  const edit = () => {
+    setTarget(goal ? formatWeight(goal.target_kg, unit) : "");
+    setBy(goal?.target_date ?? "");
+    setEditing(true);
+  };
+  const save = async () => {
+    const v = Number(target);
+    if (!(v > 0)) return;
+    await api.setLiftGoal(exerciseId, unit === "lb" ? v * KG_PER_LB : v, by || null);
+    setEditing(false);
+    onChanged();
+  };
+  const remove = async () => {
+    await api.deleteLiftGoal(exerciseId);
+    setEditing(false);
+    onChanged();
+  };
+  if (!editing)
+    return (
+      <div className="row small">
+        {goal && <span className="muted">{goalText(goal, unit)}</span>}
+        <button className="link-btn" onClick={edit}>
+          {goal ? "Edit goal" : "Set a goal"}
+        </button>
+      </div>
+    );
+  return (
+    <div className="row small">
+      <label>
+        Est. 1RM ({unit}) <input className="mini-input" type="number" inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} />
+      </label>
+      <label>
+        By (optional) <input type="date" value={by} onChange={(e) => setBy(e.target.value)} />
+      </label>
+      <button className="link-btn" onClick={save}>
+        Save
+      </button>
+      {goal && (
+        <button className="link-btn danger" onClick={remove}>
+          Remove
+        </button>
+      )}
+      <button className="link-btn" onClick={() => setEditing(false)}>
+        Cancel
+      </button>
+    </div>
+  );
+}
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -123,6 +181,8 @@ function ExerciseDetail({ id }: { id: number }) {
   const [sessionsShown, setSessionsShown] = useState(10);
   const [tab, setTab] = useState<"about" | "history" | "charts" | "records">("history");
 
+  const [goal, setGoal] = useState<LiftGoal | null>(null);
+  const loadGoal = () => api.liftGoal(id).then(setGoal);
   const load = () => {
     api.exerciseInfo(id).then(setInfo);
     api.exerciseStats(id).then((s) => {
@@ -133,6 +193,7 @@ function ExerciseDetail({ id }: { id: number }) {
   useEffect(() => {
     load();
     api.muscles().then((m) => setMuscles(m.muscles));
+    loadGoal();
     api.listPhases().then(setPhases);
     api.weighIns(true).then(setWeights);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -314,7 +375,9 @@ function ExerciseDetail({ id }: { id: number }) {
                 markers={markers}
                 bands={bands}
                 zero={metric === "volume"}
+                goalLine={metric === "e1rm" && goal ? w(goal.target_kg) : undefined}
               />
+              {metric === "e1rm" && info.kind === "weight_reps" && <LiftGoalRow exerciseId={id} goal={goal} onChanged={loadGoal} />}
               {bodyweightKind && bwPoints.length > 0 && (
                 <>
                   <div className="section-label">Your bodyweight over the same period</div>

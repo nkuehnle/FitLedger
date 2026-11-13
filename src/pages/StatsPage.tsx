@@ -22,7 +22,9 @@ import { CalendarHeatmap } from "../charts/CalendarHeatmap";
 import { RangePicker, inRange, isoDate, phaseRange, presetRange, today, type Range, useSavedRange } from "../charts/RangePicker";
 import { ScatterChart } from "../charts/ScatterChart";
 import { TargetRange } from "../charts/TargetRange";
+import { LiftsCard } from "../components/LiftsCard";
 import { ProgressHeader } from "../components/ProgressHeader";
+import { WhatWorked } from "../components/WhatWorked";
 import { TimeSeriesChart, type Band } from "../charts/TimeSeriesChart";
 import { useChartTheme } from "../charts/theme";
 import { ShareButton } from "../share/ShareDialog";
@@ -47,8 +49,10 @@ export default function StatsPage() {
       <ProgressHeader current="stats" />
       <RangePicker value={range} onChange={setRange} phases={phases} presets={["week", "4w", "3m", "6m", "1y", "all"]} />
       <div className="stats-grid">
+        <LiftsCard />
         <MuscleMapSection range={range} phases={phases} names={names} muscles={muscles} />
         <TargetsSection range={range} names={names} />
+        <WhatWorked phases={phases} />
         <GroupTrendSection range={range} groups={groups} muscles={muscles} phases={phases} />
         <FrequencySection phases={phases} />
         <DurationSection range={range} phases={phases} />

@@ -494,6 +494,46 @@ fn current_goal(state: State<AppState>, today: String) -> CmdResult<GoalInfo> {
 }
 
 #[tauri::command]
+fn lift_status(state: State<AppState>, today: String) -> CmdResult<fitledger_core::coach::LiftsView> {
+    let d = date(&today)?;
+    with(&state, |db| db.lift_status(d))
+}
+
+#[tauri::command]
+fn dismiss_lift(state: State<AppState>, exercise_id: i64, today: String) -> CmdResult<()> {
+    let d = date(&today)?;
+    with(&state, |db| db.dismiss_lift(exercise_id, d))
+}
+
+#[tauri::command]
+fn week_progress(state: State<AppState>, today: String) -> CmdResult<Vec<fitledger_core::coach::WeekShortfall>> {
+    let d = date(&today)?;
+    with(&state, |db| db.week_progress(d))
+}
+
+#[tauri::command]
+fn lift_goal(state: State<AppState>, exercise_id: i64, today: String) -> CmdResult<Option<fitledger_core::coach::LiftGoalView>> {
+    let d = date(&today)?;
+    with(&state, |db| db.lift_goal(exercise_id, d))
+}
+
+#[tauri::command]
+fn set_lift_goal(state: State<AppState>, exercise_id: i64, target_kg: f64, target_date: Option<String>) -> CmdResult<()> {
+    with(&state, |db| db.set_lift_goal(exercise_id, target_kg, target_date.as_deref()))
+}
+
+#[tauri::command]
+fn delete_lift_goal(state: State<AppState>, exercise_id: i64) -> CmdResult<()> {
+    with(&state, |db| db.delete_lift_goal(exercise_id))
+}
+
+#[tauri::command]
+fn phase_compare(state: State<AppState>, a: i64, b: i64, today: String) -> CmdResult<(fitledger_core::coach::PhaseSummary, fitledger_core::coach::PhaseSummary)> {
+    let d = date(&today)?;
+    with(&state, |db| db.phase_compare(a, b, d))
+}
+
+#[tauri::command]
 fn progress_health(state: State<AppState>, today: String) -> CmdResult<Vec<fitledger_core::health::MuscleHealth>> {
     let d = date(&today)?;
     with(&state, |db| db.progress_health(d))
@@ -1360,7 +1400,7 @@ pub fn run() {
             muscles, list_exercises, exercise_info, update_exercise, create_exercise, exercise_stats,
             muscle_sets, weekly_muscle_sets, last_trained, workouts_per_period, streak, workout_series, discomfort_points,
             list_templates, save_template, archive_template, template_from_workout, active_schedule, save_schedule,
-            suggestion, projected_weekly_sets, muscle_targets, set_muscle_target, current_goal, set_goal, goal_history, progress_health, list_phases, save_phase, delete_phase,
+            suggestion, projected_weekly_sets, muscle_targets, set_muscle_target, current_goal, set_goal, goal_history, progress_health, lift_status, dismiss_lift, week_progress, lift_goal, set_lift_goal, delete_lift_goal, phase_compare, list_phases, save_phase, delete_phase,
             propose_from_history, apply_history_proposal, programs, install_program, routine_text, routine_resources, preview_routine, import_routine,
             progress_report, save_text, share_text, copy_text, paste_text,
             weigh_ins, add_weigh_in, update_weigh_in, update_measurement, delete_weigh_in, inbody_fields, inbody_scans, save_inbody_scan, delete_inbody_scan, norm_reference, exercise_comparison, comparable_exercises,

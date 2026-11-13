@@ -18,12 +18,11 @@ pub const ROUTINE_FORMAT: &str = "fitledger-routine";
 pub const ROUTINE_VERSION: u32 = 1;
 const MAX_ROUTINE_BYTES: usize = 1_000_000;
 const MAX_CYCLE_DAYS: i64 = 366;
-/// Written into every exported file, so the file alone tells an AI assistant how to write a new one.
-const FOR_AI: &str = "This is a FitLedger workout routine. If the user asks you to change it or write a new one, ask about their goal, \
-training days, equipment and experience if you don't know them, then reply with one complete JSON document in this format. They will paste \
-or import it with Import routine in FitLedger. Keep format and version unchanged, and leave out for_ai, exercise_ids and muscle_ids. \
-templates maps each workout name to its exercises in order. Every slug must come from exercise_ids or the exercises list in resources.json, plus any in custom_exercises. Use a \
-custom exercise only when nothing in those lists fits: give it a slug starting with custom-, a name, and kind (one of weight_reps, \
+/// Written into every exported file, so the file documents its own format.
+const FORMAT_GUIDE: &str = "This is a FitLedger workout routine: one JSON document, imported with Import routine or Paste routine in FitLedger. \
+format and version stay unchanged. format_guide, exercise_ids and muscle_ids are reference only and can be left out. \
+templates maps each workout name to its exercises in order. Every slug comes from exercise_ids or the exercises list in resources.json, plus any in custom_exercises. A \
+custom exercise is for when nothing in those lists fits: it has a slug starting with custom-, a name, and kind (one of weight_reps, \
 bodyweight_reps, assisted_bodyweight, duration, distance_duration, weight_distance), load_mode (total, or per_hand for dumbbell weights \
 given per hand), and primary and secondary lists of ids from muscle_ids or the muscles list in resources.json. sets, rep_min, rep_max and rest_s (seconds) are whole numbers or \
 null. Exercises in a template with the same superset number form a superset; otherwise superset is null. setup_note is text or null. \
@@ -36,9 +35,9 @@ const EXERCISE_KINDS: [&str; 6] = ["weight_reps", "bodyweight_reps", "assisted_b
 pub struct Routine {
     pub format: String,
     pub version: u32,
-    /// How to write this format, for an AI assistant. Ignored on import.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub for_ai: Option<String>,
+    /// Describes this format. Ignored on import. Older files call it `for_ai`.
+    #[serde(default, alias = "for_ai", skip_serializing_if = "Option::is_none")]
+    pub format_guide: Option<String>,
     pub name: String,
     pub description: Option<String>,
     pub schedule: Option<RoutineSchedule>,
@@ -106,7 +105,7 @@ enum Resolved {
     New(RoutineCustomExercise),
 }
 
-/// Reads and checks a routine. Text around the JSON is skipped, so an assistant's whole reply can
+/// Reads and checks a routine. Text around the JSON is skipped, so a whole message around it can
 /// be pasted. This doesn't touch the database.
 pub fn parse_routine(text: &str) -> Result<Routine> {
     if text.len() > MAX_ROUTINE_BYTES {
@@ -193,7 +192,7 @@ fn program_routine(p: &Program) -> Result<Routine> {
     Ok(Routine {
         format: ROUTINE_FORMAT.into(),
         version: ROUTINE_VERSION,
-        for_ai: None,
+        format_guide: None,
         name: p.name.clone(),
         description: Some(p.description.clone()),
         schedule: Some(RoutineSchedule { kind: if weekly { "weekly" } else { "cycle" }.into(), cycle_length: p.days.len() as i64, days: p.days.clone() }),
@@ -230,7 +229,7 @@ impl Db {
         self.self_describing(Routine {
             format: ROUTINE_FORMAT.into(),
             version: ROUTINE_VERSION,
-            for_ai: None,
+            format_guide: None,
             name: s.name,
             description: None,
             schedule: Some(RoutineSchedule { kind: s.kind, cycle_length: s.cycle_length, days }),
@@ -249,7 +248,7 @@ impl Db {
         self.self_describing(Routine {
             format: ROUTINE_FORMAT.into(),
             version: ROUTINE_VERSION,
-            for_ai: None,
+            format_guide: None,
             name: t.name.clone(),
             description: None,
             schedule: None,
@@ -260,8 +259,8 @@ impl Db {
         })
     }
 
-    /// `resources.json`: every exercise and muscle with the rules and an example, so an AI assistant
-    /// can write a routine with nothing else. This is the user's own list: custom exercises are in it.
+    /// `resources.json`: every exercise and muscle with the format and an example.
+    /// This is the user's own list: custom exercises are in it.
     pub fn routine_resources(&self) -> Result<String> {
         let exercises: Vec<serde_json::Value> = self
             .list_exercises(false)?
@@ -277,7 +276,7 @@ impl Db {
         let example_routine = Routine {
             format: ROUTINE_FORMAT.into(),
             version: ROUTINE_VERSION,
-            for_ai: None,
+            format_guide: None,
             name: "Example".into(),
             description: Some("Two workouts a week".into()),
             schedule: Some(RoutineSchedule {
@@ -296,7 +295,7 @@ impl Db {
         let resources = serde_json::json!({
             "format": "fitledger-resources",
             "version": ROUTINE_VERSION,
-            "how_to_write_a_routine": FOR_AI,
+            "how_to_write_a_routine": FORMAT_GUIDE,
             "example_routine": example_routine,
             "muscles": muscles,
             "exercises": exercises,
@@ -304,10 +303,10 @@ impl Db {
         Ok(serde_json::to_string_pretty(&resources).expect("json serializes"))
     }
 
-    /// Adds what an AI assistant needs to write a new routine from this file alone. The user's own
+    /// Adds the format guide and the exercise and muscle ids to the file. The user's own
     /// custom exercises stay out of the list, since the file may be shared.
     fn self_describing(&self, mut r: Routine) -> Result<Routine> {
-        r.for_ai = Some(FOR_AI.into());
+        r.format_guide = Some(FORMAT_GUIDE.into());
         r.exercise_ids = self.list_exercises(false)?.into_iter().filter(|e| !e.is_custom).map(|e| e.slug).collect();
         r.exercise_ids.sort();
         let mut stmt = self.conn().prepare("SELECT id FROM muscle ORDER BY position")?;
@@ -577,7 +576,7 @@ mod tests {
     #[test]
     fn routines_hold_no_logged_data() {
         let mut r = source().export_active_routine().unwrap();
-        (r.for_ai, r.exercise_ids, r.muscle_ids) = (None, Vec::new(), Vec::new());
+        (r.format_guide, r.exercise_ids, r.muscle_ids) = (None, Vec::new(), Vec::new());
         let text = serde_json::to_string(&r).unwrap();
         for word in ["weight_kg", "last_done", "workout"] {
             assert!(!text.contains(word), "{word} in {text}");
@@ -585,10 +584,17 @@ mod tests {
     }
 
     #[test]
+    fn older_files_with_for_ai_still_import() {
+        let r = parse_routine(r#"{"format": "fitledger-routine", "version": 1, "for_ai": "old guide", "name": "Old", "description": null, "schedule": null,
+            "templates": {"Day": [{"slug": "bench-press-barbell", "sets": 3, "rep_min": 5, "rep_max": 8, "superset": null, "rest_s": 120, "setup_note": null}]}}"#).unwrap();
+        assert_eq!(r.format_guide.as_deref(), Some("old guide"));
+    }
+
+    #[test]
     fn exported_files_explain_themselves() {
         let db = source();
         let r = db.export_active_routine().unwrap();
-        let guide = r.for_ai.as_deref().unwrap();
+        let guide = r.format_guide.as_deref().unwrap();
         for kind in EXERCISE_KINDS {
             assert!(guide.contains(kind), "{kind} missing from the guide");
         }
@@ -619,16 +625,16 @@ mod tests {
         assert!(parse_routine(&text).is_err(), "resources aren't a routine");
     }
 
-    /// The shape the guide asks for, as an assistant would reply, with no guide or id lists.
+    /// The shape the guide describes, pasted with text around it, with no guide or id lists.
     #[test]
-    fn an_assistants_reply_imports() {
+    fn pasted_text_around_a_routine_imports() {
         let db = source();
         let muscle = db.export_active_routine().unwrap().muscle_ids[0].clone();
         let reply = format!(
             r#"Here's your routine:
 
 ```json
-{{"format": "fitledger-routine", "version": 1, "name": "Claude's split", "description": "Two days",
+{{"format": "fitledger-routine", "version": 1, "name": "Two-day split", "description": "Two days",
   "schedule": {{"kind": "cycle", "cycle_length": 3, "days": ["Day A", null, "Day B"]}},
   "templates": {{
     "Day A": [{{"slug": "bench-press-barbell", "sets": 3, "rep_min": 5, "rep_max": 8, "superset": null, "rest_s": 120, "setup_note": null}}],

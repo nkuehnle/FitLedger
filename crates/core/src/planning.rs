@@ -293,7 +293,7 @@ impl Db {
 
     /// Finished workouts as (date, template id). Imported workouts without a template count
     /// for the template with the same name.
-    fn done_templates(&self, from: NaiveDate) -> Result<Vec<(NaiveDate, i64)>> {
+    pub(crate) fn done_templates(&self, from: NaiveDate) -> Result<Vec<(NaiveDate, i64)>> {
         let mut stmt = self.conn().prepare(
             "SELECT substr(w.started_at_local, 1, 10), coalesce(w.template_id, (SELECT t.id FROM template t WHERE t.name = w.name AND t.archived = 0))
              FROM workout w WHERE w.finished = 1 AND substr(w.started_at_local, 1, 10) >= ?1",
@@ -319,7 +319,6 @@ impl Db {
     /// replaced by an unsaved edit. Cycles are scaled to 7 days.
     pub fn projected_weekly_sets(&self, edited: Option<&Template>) -> Result<Vec<(String, f64)>> {
         let Some(s) = self.active_schedule()? else { return Ok(Vec::new()) };
-        let secondary = self.secondary_set_weight()?;
         let scale = 7.0 / s.days.len().max(1) as f64;
         let mut templates: HashMap<i64, Template> = self.list_templates()?.into_iter().filter_map(|t| Some((t.id?, t))).collect();
         if let Some(e) = edited {
@@ -327,16 +326,21 @@ impl Db {
                 templates.insert(id, e.clone());
             }
         }
-        let mut muscles: HashMap<i64, Vec<(String, bool)>> = HashMap::new();
-        {
-            let mut stmt = self.conn().prepare("SELECT exercise_id, muscle_id, role FROM exercise_muscle")?;
-            for row in stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?)))? {
-                let (e, m, role) = row?;
-                muscles.entry(e).or_default().push((m, role == "primary"));
-            }
-        }
+        let ids: Vec<i64> = s.days.iter().flatten().copied().collect();
+        Ok(self.sets_from_templates(&templates, &ids, scale)?.into_iter().collect())
+    }
+
+    /// Sets per muscle if each of `ids` is done once as planned.
+    pub(crate) fn template_muscle_sets(&self, ids: &[i64], scale: f64) -> Result<BTreeMap<String, f64>> {
+        let templates: HashMap<i64, Template> = self.list_templates()?.into_iter().filter_map(|t| Some((t.id?, t))).collect();
+        self.sets_from_templates(&templates, ids, scale)
+    }
+
+    fn sets_from_templates(&self, templates: &HashMap<i64, Template>, ids: &[i64], scale: f64) -> Result<BTreeMap<String, f64>> {
+        let secondary = self.secondary_set_weight()?;
+        let muscles = self.muscle_map()?;
         let mut acc: BTreeMap<String, f64> = BTreeMap::new();
-        for t in s.days.iter().flatten() {
+        for t in ids {
             let Some(t) = templates.get(t) else { continue };
             for e in &t.exercises {
                 let sets = e.target_sets.unwrap_or(3) as f64;
@@ -345,7 +349,7 @@ impl Db {
                 }
             }
         }
-        Ok(acc.into_iter().collect())
+        Ok(acc)
     }
 
     /// Every cut / maintain / gain stretch, oldest first.

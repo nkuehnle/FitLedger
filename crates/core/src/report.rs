@@ -1,5 +1,4 @@
-//! A Markdown progress report the user can hand to Claude or another assistant. FitLedger never
-//! sends it anywhere itself. Sections with no data are left out.
+//! A Markdown progress report the user can share or copy. Sections with no data are left out.
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write;

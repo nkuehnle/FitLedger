@@ -10,7 +10,7 @@ use serde::Serialize;
 
 use crate::db::Db;
 use crate::planning::Goal;
-use crate::stats::e1rm;
+use crate::stats::{Formula, WorkSet, e1rm};
 use crate::Result;
 
 #[derive(Debug, Clone, Serialize)]
@@ -32,7 +32,7 @@ pub struct MuscleHealth {
 
 const VOLUME_WEEKS: i64 = 4;
 /// Strength compares the best e1RM of the last 6 weeks with the 6 weeks before.
-const STRENGTH_DAYS: i64 = 42;
+pub(crate) const STRENGTH_DAYS: i64 = 42;
 
 fn clamp(v: f64) -> f64 {
     v.clamp(-1.0, 1.0)
@@ -123,6 +123,18 @@ fn monthly_change(series: &[Vec<(NaiveDate, f64)>], today: NaiveDate) -> Option<
     (!changes.is_empty()).then(|| changes.iter().sum::<f64>() / changes.len() as f64)
 }
 
+/// A strength change bigger than this means the exercise or its logging changed, not the muscle.
+pub(crate) const IMPLAUSIBLE_CHANGE: f64 = 0.25;
+
+/// The exercise and estimated 1RM of a set that can show strength: not a warm-up or a high-rep set.
+pub(crate) fn strength_point(s: &WorkSet, formula: Formula) -> Option<(i64, f64)> {
+    let (ex, w, r) = (s.exercise_id?, s.weight_kg?, s.reps?);
+    if r > 15 || s.set_type == "warmup" {
+        return None;
+    }
+    Some((ex, e1rm(w, r, formula)?))
+}
+
 fn pct(v: f64) -> String {
     format!("{}{:.1}%", if v >= 0.0 { "+" } else { "−" }, (v * 100.0).abs())
 }
@@ -147,11 +159,7 @@ impl Db {
         let start = (split - Duration::days(STRENGTH_DAYS)).to_string();
         let mut best: HashMap<i64, (f64, f64)> = HashMap::new();
         for s in self.work_sets(None, Some(&start), Some(&today.to_string()))? {
-            let (Some(ex), Some(w), Some(r)) = (s.exercise_id, s.weight_kg, s.reps) else { continue };
-            if r > 15 || s.set_type == "warmup" {
-                continue;
-            }
-            let Some(e) = e1rm(w, r, formula) else { continue };
+            let Some((ex, e)) = strength_point(&s, formula) else { continue };
             let b = best.entry(ex).or_insert((0.0, 0.0));
             if s.date() > split {
                 b.1 = b.1.max(e);
@@ -165,9 +173,8 @@ impl Db {
             if before <= 0.0 || now <= 0.0 {
                 continue;
             }
-            // A jump this big means the exercise or its logging changed, not the muscle.
             let change = now / before - 1.0;
-            if change.abs() > 0.25 {
+            if change.abs() > IMPLAUSIBLE_CHANGE {
                 continue;
             }
             for (m, primary) in muscles {

@@ -634,6 +634,56 @@ export interface NormReference {
   rough: boolean;
 }
 
+export interface LiftGoal {
+  exercise_id: number;
+  target_kg: number;
+  target_date: string | null;
+  current_kg: number | null;
+  projected: string | null;
+  state: "reached" | "on_pace" | "behind" | "open";
+}
+
+export interface LiftStatus {
+  exercise_id: number;
+  name: string;
+  state: "moving" | "flat" | "sliding" | "check";
+  change: number;
+  last_at: string;
+  last_sets: [number, number][];
+  rating: "up" | "hold" | "down" | null;
+  suggestion: string | null;
+  goal: LiftGoal | null;
+}
+
+export interface LiftsView {
+  lifts: LiftStatus[];
+  left_out: number;
+}
+
+export interface WeekShortfall {
+  muscle_id: string;
+  name: string;
+  done: number;
+  planned: number;
+  target: number;
+  short: number;
+}
+
+export interface PhaseSummary {
+  id: number;
+  name: string;
+  lane: string;
+  start_date: string;
+  end_date: string | null;
+  weeks: number;
+  sessions_per_week: number;
+  sets_per_week: number;
+  median_change: number | null;
+  lifts_compared: number;
+  bodyweight_change_kg: number | null;
+  overlaps: [string, number][];
+}
+
 export const api = {
   previewStrongWorkouts: (text: string, weightUnit?: WeightUnit) => invoke<WorkoutPreview>("preview_strong_workouts", { text, weightUnit }),
   importStrongWorkouts: (text: string, fileName: string, weightUnit?: WeightUnit) =>
@@ -732,6 +782,13 @@ export const api = {
       },
     ),
   progressHealth: () => invoke<MuscleHealth[]>("progress_health", { today: localToday() }),
+  liftStatus: () => invoke<LiftsView>("lift_status", { today: localToday() }),
+  dismissLift: (exerciseId: number) => invoke<void>("dismiss_lift", { exerciseId, today: localToday() }),
+  weekProgress: () => invoke<WeekShortfall[]>("week_progress", { today: localToday() }),
+  liftGoal: (exerciseId: number) => invoke<LiftGoal | null>("lift_goal", { exerciseId, today: localToday() }),
+  setLiftGoal: (exerciseId: number, targetKg: number, targetDate: string | null) => invoke<void>("set_lift_goal", { exerciseId, targetKg, targetDate }),
+  deleteLiftGoal: (exerciseId: number) => invoke<void>("delete_lift_goal", { exerciseId }),
+  phaseCompare: (a: number, b: number) => invoke<[PhaseSummary, PhaseSummary]>("phase_compare", { a, b, today: localToday() }),
   goalHistory: () =>
     invoke<{ phase_id: number; goal: Goal; start_date: string; end_date: string | null; weekly_rate_kg: number | null }[]>("goal_history"),
   setGoal: (goal: Goal, start?: string, weeklyRateKg?: number | null) =>

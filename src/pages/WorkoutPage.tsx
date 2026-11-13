@@ -535,8 +535,8 @@ function ExerciseBlock({
           {(["down", "hold", "up"] as const).map((v) => (
             <button
               key={v}
-              className={e.next_intent === v ? "intent-btn active" : "intent-btn"}
-              title={{ up: "Go up", hold: "Hold", down: "Go down" }[v]}
+              className={`intent-btn${e.next_intent === v ? " active" : ""}${prev?.next_intent === v ? " last" : ""}`}
+              title={{ up: "Go up", hold: "Hold", down: "Go down" }[v] + (prev?.next_intent === v ? " (your rating last time)" : "")}
               onClick={() => update({ next_intent: e.next_intent === v ? null : v })}
             >
               {{ up: "↑", hold: "=", down: "↓" }[v]}

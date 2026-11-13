@@ -29,7 +29,7 @@ const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 const USER_TABLES: &[&str] = &[
     "setting", "exercise", "exercise_alias", "exercise_muscle", "name_mapping", "template", "template_exercise",
     "workout", "workout_exercise", "workout_set", "bodyweight", "inbody_scan", "diet_day", "schedule",
-    "schedule_slot", "phase", "muscle_target", "csv_mapping", "body_measurement", "day_health",
+    "schedule_slot", "phase", "muscle_target", "lift_goal", "csv_mapping", "body_measurement", "day_health",
 ];
 
 #[derive(Debug, Clone, Serialize)]

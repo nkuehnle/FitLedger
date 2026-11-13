@@ -573,18 +573,20 @@ impl Db {
     /// working weight and the reps of the working sets at that weight.
     fn recent_tops(&self, exercise_id: i64, workout_id: i64, started: &str) -> Result<Vec<SessionTop>> {
         let mut stmt = self.conn().prepare_cached(
-            "SELECT we.id FROM workout_exercise we JOIN workout w ON w.id = we.workout_id
+            "SELECT DISTINCT w.id, w.started_at_local FROM workout_exercise we JOIN workout w ON w.id = we.workout_id
              WHERE we.exercise_id = ?1 AND w.finished = 1 AND w.id != ?2 AND w.started_at_local <= ?3
              ORDER BY w.started_at_local DESC LIMIT 4",
         )?;
         let ids: Vec<i64> = stmt.query_map(params![exercise_id, workout_id, started], |r| r.get(0))?.collect::<rusqlite::Result<_>>()?;
         let mut out = Vec::new();
         for id in ids {
+            // One session, even if the exercise appears twice in that workout (top sets, then back-off sets).
             let mut ss = self.conn().prepare_cached(
-                "SELECT weight_kg, reps FROM workout_set WHERE workout_exercise_id = ?1 AND set_type IN ('normal', 'failure')
-                 AND weight_kg IS NOT NULL AND reps IS NOT NULL ORDER BY position",
+                "SELECT s.weight_kg, s.reps FROM workout_set s JOIN workout_exercise we ON we.id = s.workout_exercise_id
+                 WHERE we.workout_id = ?1 AND we.exercise_id = ?2 AND s.set_type IN ('normal', 'failure')
+                 AND s.weight_kg IS NOT NULL AND s.reps IS NOT NULL ORDER BY we.position, s.position",
             )?;
-            let sets: Vec<(f64, i64)> = ss.query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<rusqlite::Result<_>>()?;
+            let sets: Vec<(f64, i64)> = ss.query_map(params![id, exercise_id], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<rusqlite::Result<_>>()?;
             let Some(top) = sets.iter().map(|s| s.0).reduce(f64::max) else { continue };
             out.push(SessionTop { weight_kg: top, reps: sets.iter().filter(|s| (s.0 - top).abs() < 1e-6).map(|s| s.1).collect() });
         }
@@ -595,15 +597,16 @@ impl Db {
     /// the exercise's setup note and muscles.
     pub fn previous_for_workout(&self, workout_id: i64) -> Result<Vec<Previous>> {
         let mut stmt = self.conn().prepare(
-            "SELECT we.id, we.exercise_id, e.setup_note FROM workout_exercise we LEFT JOIN exercise e ON e.id = we.exercise_id
+            "SELECT we.id, we.exercise_id, e.setup_note, e.kind FROM workout_exercise we LEFT JOIN exercise e ON e.id = we.exercise_id
              WHERE we.workout_id = ?1 ORDER BY we.position",
         )?;
-        let rows: Vec<(i64, Option<i64>, Option<String>)> =
-            stmt.query_map([workout_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect::<rusqlite::Result<_>>()?;
+        let rows: Vec<(i64, Option<i64>, Option<String>, Option<String>)> =
+            stmt.query_map([workout_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?.collect::<rusqlite::Result<_>>()?;
         drop(stmt);
         let started: String = self.conn().query_row("SELECT started_at_local FROM workout WHERE id = ?1", [workout_id], |r| r.get(0))?;
         let mut out = Vec::new();
-        for (we, ex, setup_note) in rows {
+        let mut seen: HashMap<i64, usize> = HashMap::new();
+        for (we, ex, setup_note, kind) in rows {
             let mut prev = Previous {
                 workout_exercise_id: we,
                 at: None,
@@ -621,23 +624,31 @@ impl Db {
                     let (m, role) = row?;
                     if role == "primary" { prev.primary.push(m) } else { prev.secondary.push(m) }
                 }
-                let last: Option<(i64, String, Option<String>, Option<String>, Option<i64>, Option<i64>)> = self
-                    .conn()
-                    .query_row(
-                        "SELECT we.id, w.started_at_local, we.notes, we.next_intent, we.rep_min, we.rep_max FROM workout_exercise we
-                         JOIN workout w ON w.id = we.workout_id
-                         WHERE we.exercise_id = ?1 AND w.finished = 1 AND w.id != ?2 AND w.started_at_local <= ?3
-                         ORDER BY w.started_at_local DESC LIMIT 1",
-                        params![ex, workout_id, started],
-                        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
-                    )
-                    .optional()?;
+                // The same exercise twice in a workout lines up with its rows from last time, in order.
+                let occurrence = seen.entry(ex).or_default();
+                let mut last_rows = self.conn().prepare_cached(
+                    "SELECT we.id, w.started_at_local, we.notes, we.next_intent, we.rep_min, we.rep_max FROM workout_exercise we
+                     JOIN workout w ON w.id = we.workout_id
+                     WHERE we.exercise_id = ?1 AND we.workout_id = (
+                         SELECT w2.id FROM workout_exercise we2 JOIN workout w2 ON w2.id = we2.workout_id
+                         WHERE we2.exercise_id = ?1 AND w2.finished = 1 AND w2.id != ?2 AND w2.started_at_local <= ?3
+                         ORDER BY w2.started_at_local DESC LIMIT 1)
+                     ORDER BY we.position",
+                )?;
+                let lasts: Vec<(i64, String, Option<String>, Option<String>, Option<i64>, Option<i64>)> = last_rows
+                    .query_map(params![ex, workout_id, started], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)))?
+                    .collect::<rusqlite::Result<_>>()?;
+                let last = lasts.get(*occurrence).or(lasts.last()).cloned();
+                *occurrence += 1;
                 if let Some((last_we, at, notes, intent, last_rep_min, last_rep_max)) = last {
                     // Rep range from this workout, else from last time.
                     let (lo, hi): (Option<i64>, Option<i64>) =
                         self.conn().query_row("SELECT rep_min, rep_max FROM workout_exercise WHERE id = ?1", [we], |r| Ok((r.get(0)?, r.get(1)?)))?;
                     let target = if hi.is_some() { (lo, hi) } else { (last_rep_min, last_rep_max) };
-                    prev.progression = progression_hint(&self.recent_tops(ex, workout_id, &started)?, target, intent.as_deref());
+                    // More assistance is an easier set, so "heavier" means nothing here.
+                    if kind.as_deref() != Some("assisted_bodyweight") {
+                        prev.progression = progression_hint(&self.recent_tops(ex, workout_id, &started)?, target, intent.as_deref());
+                    }
                     let mut ss = self.conn().prepare_cached(
                         "SELECT set_type, weight_kg, reps, distance_m, duration_s FROM workout_set WHERE workout_exercise_id = ?1 ORDER BY position",
                     )?;
@@ -703,5 +714,55 @@ mod progression_tests {
         // Hold still deloads after three misses.
         let below = [s(100.0, &[5, 4]), s(100.0, &[5, 5]), s(100.0, &[4, 4])];
         assert_eq!(kind(progression_hint(&below, (Some(6), Some(8)), Some("hold"))), Some("deload".into()));
+    }
+
+    /// Writes a finished workout: `(slug, sets of (weight, reps))` per row.
+    fn workout(db: &Db, id: i64, day: &str, rows: &[(&str, &[(f64, i64)])]) {
+        db.conn().execute("INSERT INTO workout (id, name, started_at_local) VALUES (?1, 'W', ?2)", params![id, format!("{day} 10:00:00")]).unwrap();
+        for (i, (slug, sets)) in rows.iter().enumerate() {
+            let ex = db.exercise_id(slug).unwrap().unwrap();
+            db.conn().execute("INSERT INTO workout_exercise (workout_id, position, source_name, exercise_id) VALUES (?1, ?2, ?3, ?4)", params![id, i as i64, slug, ex]).unwrap();
+            let we = db.conn().last_insert_rowid();
+            for (j, (w, r)) in sets.iter().enumerate() {
+                db.conn()
+                    .execute("INSERT INTO workout_set (workout_exercise_id, position, set_type, weight_kg, reps) VALUES (?1, ?2, 'normal', ?3, ?4)", params![we, j as i64, w, r])
+                    .unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn a_repeated_exercise_is_one_session() {
+        let db = Db::open_in_memory().unwrap();
+        let bench = "bench-press-barbell";
+        let day: &[(&str, &[(f64, i64)])] = &[(bench, &[(100.0, 5), (100.0, 5)]), (bench, &[(60.0, 10), (60.0, 10)])];
+        workout(&db, 1, "2026-01-01", day);
+        workout(&db, 2, "2026-01-08", day);
+        workout(&db, 3, "2026-01-15", day);
+        let ex = db.exercise_id(bench).unwrap().unwrap();
+        let tops = db.recent_tops(ex, 99, "2026-02-01 00:00:00").unwrap();
+        assert_eq!(tops.len(), 3);
+        assert!(tops.iter().all(|t| t.weight_kg == 100.0 && t.reps == [5, 5]), "{tops:?}");
+
+        // Each row today sees its own row from last time.
+        workout(&db, 4, "2026-01-22", day);
+        db.conn().execute("UPDATE workout SET finished = 0 WHERE id = 4", []).unwrap();
+        let prev = db.previous_for_workout(4).unwrap();
+        assert_eq!(prev[0].sets[0].weight_kg, Some(100.0));
+        assert_eq!(prev[1].sets[0].weight_kg, Some(60.0));
+    }
+
+    #[test]
+    fn assisted_exercises_get_no_weight_hint() {
+        let db = Db::open_in_memory().unwrap();
+        let (slug, ): (String, ) = db.conn().query_row("SELECT slug FROM exercise WHERE kind = 'assisted_bodyweight' LIMIT 1", [], |r| Ok((r.get(0)?, ))).unwrap();
+        let day: &[(&str, &[(f64, i64)])] = &[(&slug, &[(20.0, 8), (20.0, 8)])];
+        workout(&db, 1, "2026-01-01", day);
+        workout(&db, 2, "2026-01-08", day);
+        workout(&db, 3, "2026-01-15", day);
+        db.conn().execute("UPDATE workout SET finished = 0 WHERE id = 3", []).unwrap();
+        let prev = db.previous_for_workout(3).unwrap();
+        assert!(!prev[0].sets.is_empty());
+        assert_eq!(prev[0].progression, None);
     }
 }

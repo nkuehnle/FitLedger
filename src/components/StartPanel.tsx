@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { api, type StartFrom, type Suggestion, type Template } from "../api";
+import { api, type StartFrom, type Suggestion, type Template, type WeekShortfall } from "../api";
 import { navigate } from "../App";
 import { today } from "../charts/RangePicker";
 import { templateColor, useChartTheme } from "../charts/theme";
 import { parseLocal } from "../format";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const sets = (n: number) => String(Math.round(n * 10) / 10);
 const dayName = (iso: string) => DAYS[(parseLocal(iso).getDay() + 6) % 7];
 
 /** Top of the Workouts tab: resume, or start the suggested workout in one tap. */
@@ -14,10 +15,12 @@ export function StartPanel() {
   const [active, setActive] = useState<number | null | undefined>(undefined);
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [short, setShort] = useState<WeekShortfall[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api.activeWorkout().then(setActive);
+    api.weekProgress().then(setShort);
     api.suggestion(today()).then(setSuggestion);
     api.listTemplates().then(setTemplates);
   }, []);
@@ -74,6 +77,13 @@ export function StartPanel() {
             Start empty
           </button>
         </div>
+      )}
+      {short[0] && (
+        <a className="start-finish small" href="#/stats">
+          {short[0].name}: {sets(short[0].done)} of {sets(short[0].target)} sets, {sets(short[0].planned)} planned.{" "}
+          <strong>{sets(Math.ceil(short[0].short))} short.</strong>
+          {short.length > 1 && ` +${short.length - 1} more`}
+        </a>
       )}
       <details className="start-more">
         <summary className="small">Something else</summary>
