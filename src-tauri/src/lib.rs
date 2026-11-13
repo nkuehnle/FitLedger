@@ -385,6 +385,12 @@ fn exercise_stats(state: State<AppState>, id: i64) -> CmdResult<ExerciseStats> {
 }
 
 #[tauri::command]
+fn volume_response(state: State<AppState>, muscle_id: String, today: String) -> CmdResult<Vec<fitledger_core::response::ResponsePoint>> {
+    let d = date(&today)?;
+    with(&state, |db| db.volume_response(&muscle_id, d))
+}
+
+#[tauri::command]
 fn muscle_sets(state: State<AppState>, from: Option<String>, to: Option<String>) -> CmdResult<Vec<MuscleStat>> {
     with(&state, |db| db.muscle_sets(from.as_deref(), to.as_deref()))
 }
@@ -437,6 +443,18 @@ fn save_template(state: State<AppState>, template: Template) -> CmdResult<i64> {
 #[tauri::command]
 fn archive_template(state: State<AppState>, id: i64) -> CmdResult<()> {
     with(&state, |db| db.archive_template(id))
+}
+
+#[tauri::command]
+fn routine_review(state: State<AppState>, today: String) -> CmdResult<fitledger_core::optimizer::RoutineReview> {
+    let d = date(&today)?;
+    with(&state, |db| db.routine_review(d))
+}
+
+/// Applies one suggested change; returns the template as it was, for undo.
+#[tauri::command]
+fn apply_routine_fix(state: State<AppState>, fix: fitledger_core::optimizer::Fix) -> CmdResult<Template> {
+    with(&state, |db| db.apply_routine_fix(&fix))
 }
 
 #[tauri::command]
@@ -689,6 +707,12 @@ fn exercise_comparison(slug: String, who: fitledger_core::norms::Who, weight: Ve
 }
 
 /// Which of these exercises (library slugs) have any comparison.
+#[tauri::command]
+fn strength_balance(state: State<AppState>, today: String) -> CmdResult<fitledger_core::balance::StrengthBalance> {
+    let d = date(&today)?;
+    with(&state, |db| db.strength_balance(d))
+}
+
 #[tauri::command]
 fn comparable_exercises(slugs: Vec<String>) -> Vec<String> {
     slugs.into_iter().filter(|s| !fitledger_core::norms::links(s).is_empty()).collect()
@@ -1028,6 +1052,12 @@ fn import_fit(state: State<AppState>, data: String) -> CmdResult<fitledger_core:
     let bytes = base64::engine::general_purpose::STANDARD.decode(data).map_err(|e| e.to_string())?;
     let parsed = fitledger_core::wearables::parse_fit(&bytes).map_err(err)?;
     with(&state, |db| db.import_wearable(&parsed))
+}
+
+#[tauri::command]
+fn fatigue(state: State<AppState>, today: String) -> CmdResult<fitledger_core::fatigue::FatigueReport> {
+    let d = date(&today)?;
+    with(&state, |db| db.fatigue(d))
 }
 
 #[tauri::command]
@@ -1397,18 +1427,18 @@ pub fn run() {
             active_workout, start_workout, add_exercise, remove_exercise, swap_exercise, reorder_exercises,
             add_set, add_warmup_set, set_sticky_note, remove_set, update_set, update_workout_exercise, set_rest_timer, finish_workout,
             previous_for_workout, update_template_from_workout, similar_exercises,
-            muscles, list_exercises, exercise_info, update_exercise, create_exercise, exercise_stats,
+            muscles, list_exercises, exercise_info, update_exercise, create_exercise, exercise_stats, volume_response,
             muscle_sets, weekly_muscle_sets, last_trained, workouts_per_period, streak, workout_series, discomfort_points,
-            list_templates, save_template, archive_template, template_from_workout, active_schedule, save_schedule,
+            list_templates, save_template, archive_template, template_from_workout, active_schedule, save_schedule, routine_review, apply_routine_fix,
             suggestion, projected_weekly_sets, muscle_targets, set_muscle_target, current_goal, set_goal, goal_history, progress_health, lift_status, dismiss_lift, week_progress, lift_goal, set_lift_goal, delete_lift_goal, phase_compare, list_phases, save_phase, delete_phase,
             propose_from_history, apply_history_proposal, programs, install_program, routine_text, routine_resources, preview_routine, import_routine,
             progress_report, save_text, share_text, copy_text, paste_text,
-            weigh_ins, add_weigh_in, update_weigh_in, update_measurement, delete_weigh_in, inbody_fields, inbody_scans, save_inbody_scan, delete_inbody_scan, norm_reference, exercise_comparison, comparable_exercises,
+            weigh_ins, add_weigh_in, update_weigh_in, update_measurement, delete_weigh_in, inbody_fields, inbody_scans, save_inbody_scan, delete_inbody_scan, norm_reference, exercise_comparison, comparable_exercises, strength_balance,
             preview_inbody_csv, import_inbody_csv, diet_days, save_diet_day, energy_balance,
             body_parts, measurements, add_measurement, delete_measurement,
             export_file, backup_to, inspect_backup, restore_from, db_info, save_base64, copy_png,
             rest_android_status, rest_android_rest, rest_android_clear, weigh_in_reminder, auto_backup, cardio_sessions, log_cardio, health_connect_status, health_connect_connect, health_connect_open,
-            health_connect_sync, import_fit, day_health,
+            health_connect_sync, import_fit, day_health, fatigue,
             share_export, share_backup, share_png, save_png_to_photos, read_inbody_image, stage_backup,
             counts, get_setting, set_setting,
         ])

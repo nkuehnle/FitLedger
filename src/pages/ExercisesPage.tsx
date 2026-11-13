@@ -1,3 +1,4 @@
+import { plateaus } from "../charts/stall";
 import { useEffect, useMemo, useState } from "react";
 import { api, type CardioSession, type ExerciseInfo, type ExerciseStats, type LiftGoal, type Muscle, type Phase, type WeighInRow } from "../api";
 import { navigate, usePrefs } from "../App";
@@ -238,6 +239,13 @@ function ExerciseDetail({ id }: { id: number }) {
     label: p.name,
     lane: p.lane,
   }));
+  // Plateaus come from the whole history (a range could cut one short), then are clipped to the range.
+  const shownPlateaus =
+    metric === "e1rm"
+      ? plateaus(stats.sessions.filter((x) => x.best_e1rm).map((x) => ({ t: parseLocal(x.at), v: w(x.best_e1rm!) }))).filter(
+          (p) => series.length > 0 && p.to >= series[0].t && p.from <= series[series.length - 1].t,
+        )
+      : [];
   const bwPoints: Point[] = weights.filter((x) => inRange(x.at, range)).map((x) => ({ t: parseLocal(x.at), v: w(x.weight_kg) }));
   const metrics: [Metric, string][] = [
     ["e1rm", "Est. 1RM"],
@@ -374,10 +382,16 @@ function ExerciseDetail({ id }: { id: number }) {
                 unit={metric === "reps" ? "reps" : unit}
                 markers={markers}
                 bands={bands}
+                plateaus={shownPlateaus}
                 zero={metric === "volume"}
                 goalLine={metric === "e1rm" && goal ? w(goal.target_kg) : undefined}
               />
               {metric === "e1rm" && info.kind === "weight_reps" && <LiftGoalRow exerciseId={id} goal={goal} onChanged={loadGoal} />}
+              {shownPlateaus.length > 0 && (
+                <p className="muted small">
+                  Coloured dashed lines are plateaus: a level you stayed at (within 5% under, less than 1% over) for four more sessions and four weeks.
+                </p>
+              )}
               {bodyweightKind && bwPoints.length > 0 && (
                 <>
                   <div className="section-label">Your bodyweight over the same period</div>

@@ -16,11 +16,12 @@ import { navigate } from "../App";
 import { today } from "../charts/RangePicker";
 import { CATEGORICAL_LIGHT, templateColor, useChartTheme } from "../charts/theme";
 import { ExercisePicker } from "../components/ExercisePicker";
+import { RoutineReviewTab } from "../components/RoutineReview";
 import { TargetRange } from "../charts/TargetRange";
 import { formatClock, formatDate } from "../format";
 import { saveOrShareText } from "../platform";
 
-type Tab = "templates" | "schedule" | "phases" | "targets";
+type Tab = "templates" | "schedule" | "review" | "phases" | "targets";
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export default function PlanPage({ tab, templateId }: { tab: Tab; templateId: number | "new" | null }) {
@@ -31,15 +32,16 @@ export default function PlanPage({ tab, templateId }: { tab: Tab; templateId: nu
         ‹ Settings
       </a>
       <h1 className="page-title">Plan</h1>
-      <div className="segmented">
-        {(["templates", "schedule", "phases", "targets"] as Tab[]).map((t) => (
+      <div className="segmented plan-tabs">
+        {(["templates", "schedule", "review", "phases", "targets"] as Tab[]).map((t) => (
           <a key={t} href={`#/plan/${t}`} className={tab === t ? "seg-link active" : "seg-link"}>
-            {{ templates: "Templates", schedule: "Schedule", phases: "Phases", targets: "Targets" }[t]}
+            {{ templates: "Templates", schedule: "Schedule", review: "Review", phases: "Phases", targets: "Targets" }[t]}
           </a>
         ))}
       </div>
       {tab === "templates" && <TemplatesTab />}
       {tab === "schedule" && <ScheduleTab />}
+      {tab === "review" && <RoutineReviewTab />}
       {tab === "phases" && <PhasesTab />}
       {tab === "targets" && <TargetsTab />}
     </div>

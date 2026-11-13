@@ -1,3 +1,5 @@
+import { goalCorridors, phaseLines, type GoalStretch } from "../charts/corridor";
+import { PhaseOverlay } from "../charts/PhaseOverlay";
 import * as d3 from "d3";
 import { ask } from "../components/Modal";
 import { useEffect, useMemo, useState } from "react";
@@ -25,6 +27,7 @@ import { ProfileHint, Standing, useNormProfile } from "../components/Standing";
 import { ShareButton } from "../share/ShareDialog";
 import { formatDate, formatTime, nowLocal, parseLocal, toUnit } from "../format";
 import { GOAL_TEXT, goalStatus, type GoalInfo } from "../goal";
+import { PhaseSplitCard } from "../components/PhaseSplitCard";
 import { fileToBase64 } from "../platform";
 import { isPumped, pumpRatio } from "../pump";
 
@@ -393,10 +396,16 @@ function BodyweightTab() {
   const [showInbody, setShowInbody] = useState(true);
   const [entry, setEntry] = useState("");
   const [hide, setHide] = useState(false);
+  const [showTarget, setShowTarget] = useState(true);
+  const [goals, setGoals] = useState<GoalStretch[]>([]);
   const load = () => api.weighIns(true).then(setRows);
   useEffect(() => {
     load();
     api.listPhases().then(setPhases);
+    const loadGoals = () => api.goalHistory().then(setGoals);
+    loadGoals();
+    window.addEventListener("goal-changed", loadGoals);
+    return () => window.removeEventListener("goal-changed", loadGoals);
   }, []);
 
   const inR = rows.filter((r) => inRange(r.at, range));
@@ -404,6 +413,13 @@ function BodyweightTab() {
   const inbody = inR.filter((r) => r.source === "inbody");
   const pts = (rs: WeighInRow[]): Point[] => rs.map((r) => ({ t: parseLocal(r.at), v: toUnit(r.weight_kg, unit) }));
   const series = [{ id: "bw", label: "Weigh-ins", points: pts(regular) }];
+  // Each goal's target pace, for the goals that overlap the range.
+  const corridors = goalCorridors(
+    goals.filter((g) => (!range.to || g.start_date <= range.to) && (!range.from || !g.end_date || g.end_date >= range.from)),
+    rows,
+    (kg) => toUnit(kg, unit),
+    new Date(),
+  );
   if (showInbody && inbody.length) series.push({ id: "inbody", label: "InBody scans", points: pts(inbody), style: "points" } as never);
 
   // Weekly average (last 7 days) and change over the range.
@@ -469,17 +485,30 @@ function BodyweightTab() {
           <label className="check">
             <input type="checkbox" checked={hide} onChange={(e) => setHide(e.target.checked)} /> Hide numbers
           </label>
+          {corridors.length > 0 && (
+            <label className="check">
+              <input type="checkbox" checked={showTarget} onChange={(e) => setShowTarget(e.target.checked)} /> Goal pace
+            </label>
+          )}
         </div>
         <TimeSeriesChart
           series={series}
           unit={unit}
           bands={bandsOf(phases)}
+          corridors={showTarget ? corridors : undefined}
           height={280}
           hideNumbers={hide}
           yFormat={(v) => v.toFixed(0)}
           share={false}
         />
+        {showTarget && corridors.length > 0 && (
+          <p className="muted small" style={{ marginBottom: 0 }}>
+            The green area is where your weight would be at each goal's target rate, from where that goal began (for maintenance, within
+            1% of it). Inside it, you're on pace.
+          </p>
+        )}
       </section>
+      <PhaseCompare goals={goals} rows={rows} unit={unit} />
       {compareKg.length > 0 && loaded && (
         <section className="card">
           <h2 className="section-title">How you compare</h2>
@@ -509,8 +538,42 @@ function BodyweightTab() {
           )}
         </section>
       )}
+      <PhaseSplitCard rows={rows} />
       <WeighInList rows={rows} unit={unit} onChanged={load} />
     </>
+  );
+}
+
+/** Earlier stretches of the same goal laid over the current one, from each one's first day. */
+function PhaseCompare({ goals, rows, unit }: { goals: GoalStretch[]; rows: WeighInRow[]; unit: "kg" | "lb" }) {
+  const kinds = (["gain", "cut", "maintain"] as const).filter((k) => goals.some((g) => g.goal === k));
+  const current = goals[goals.length - 1]?.goal;
+  const [picked, setPicked] = useState<Goal | null>(null);
+  const goal = picked ?? current;
+  if (!goal) return null;
+  const lines = phaseLines(goals, rows, goal, new Date());
+  if (goals.filter((g) => g.goal === goal).length < 2 && kinds.length < 2) return null;
+  return (
+    <section className="card">
+      <h2 className="section-title">Compare phases</h2>
+      <div className="chips-row" style={{ marginBottom: 6 }}>
+        {kinds.map((k) => (
+          <button key={k} className={goal === k ? "chip-btn active" : "chip-btn"} onClick={() => setPicked(k)}>
+            {GOAL_TEXT[k]}
+          </button>
+        ))}
+      </div>
+      {lines.length === 0 ? (
+        <p className="muted small">No {GOAL_TEXT[goal].toLowerCase()} phase has two weeks of weigh-ins yet.</p>
+      ) : (
+        <>
+          <p className="muted small">
+            Each {GOAL_TEXT[goal].toLowerCase()} phase from its own first day: weekly average weight against where it started.
+          </p>
+          <PhaseOverlay lines={lines} unit={unit} toUnit={(kg) => Math.round(toUnit(kg, unit) * 10) / 10} />
+        </>
+      )}
+    </section>
   );
 }
 

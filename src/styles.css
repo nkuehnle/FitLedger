@@ -110,6 +110,14 @@ input {
   border-radius: 8px;
   padding: 8px 10px;
 }
+/* Sliders skip the text-field box: its padding stopped the thumb short of the
+   ends, so min and max looked unreachable (most visibly on Android). */
+input[type="range"] {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--accent);
+}
 
 .muted {
   color: var(--muted);
@@ -267,6 +275,42 @@ input {
 .card-title {
   font-weight: 650;
   font-size: 1.05rem;
+}
+
+/* Plan → Review */
+.plan-tabs {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.plan-tabs .seg-link {
+  padding: 8px 10px;
+}
+.review-finding .section-title {
+  margin: 2px 0 4px;
+}
+.review-finding p {
+  margin: 0 0 10px;
+}
+.review-finding .button {
+  white-space: normal;
+  text-align: left;
+  height: auto;
+}
+.review-severity {
+  font-weight: 600;
+  color: var(--muted);
+}
+.review-severity.high {
+  color: var(--error);
+}
+.review-severity.medium {
+  color: var(--warn);
+}
+.card.callout.review-applied {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .empty {
@@ -647,6 +691,17 @@ input {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1 1 220px;
+  max-width: 360px;
+}
+.span-slider input {
+  flex: 1;
+  min-width: 0;
+}
+.span-value {
+  min-width: 3ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .chart-legend {
   display: flex;
@@ -1448,6 +1503,65 @@ label.check {
   font-variant-numeric: tabular-nums;
 }
 
+/* Progress → Strength balance: bars from a centre line */
+.balance-scale,
+.balance-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 1.2fr) 2fr 44px;
+  align-items: center;
+  gap: 8px;
+}
+.balance-scale {
+  grid-template-columns: 1fr auto 1fr;
+  margin: 0 52px 2px calc(37.5% + 4px);
+}
+.balance-scale span:last-child {
+  text-align: right;
+}
+.balance-rows {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.balance-rows .pair-end {
+  margin-bottom: 8px;
+}
+.balance-row {
+  width: 100%;
+  padding: 3px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+button.balance-row {
+  cursor: pointer;
+}
+.balance-track {
+  position: relative;
+  height: 8px;
+  background: var(--surface-2);
+  border-radius: 4px;
+}
+.balance-track::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  border-left: 1px solid var(--muted);
+}
+.balance-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 4px;
+}
+.balance-lifts {
+  padding: 0 0 6px;
+}
+
 .calendar-nav {
   display: flex;
   align-items: center;
@@ -2075,6 +2189,16 @@ a.start-row {
 }
 .today-recovery {
   margin-top: 4px;
+}
+.today-fatigue {
+  margin-top: 8px;
+}
+.today-fatigue summary {
+  cursor: pointer;
+}
+.today-fatigue ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
 }
 .today-grid {
   display: grid;

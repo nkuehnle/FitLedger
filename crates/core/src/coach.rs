@@ -9,8 +9,9 @@ use serde::Serialize;
 
 use crate::Result;
 use crate::db::Db;
-use crate::health::{IMPLAUSIBLE_CHANGE, STRENGTH_DAYS, strength_point, strength_score};
+use crate::health::{STRENGTH_DAYS, strength_score};
 use crate::planning::Goal;
+use crate::trend::{MAX_PLAUSIBLE_CHANGE, MAX_TREND_REPS, SessionBest, matched_change, median};
 
 /// Sessions a lift needs in the last 6 weeks, and in the 6 before, to be judged. The older window
 /// asks for less so that a short break doesn't hide nearly every lift for weeks.
@@ -38,7 +39,7 @@ pub enum LiftState {
 /// What `assess` needs to know about one lift.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LiftFacts<'a> {
-    /// Best e1RM, last 6 weeks vs the 6 before.
+    /// e1RM, last 6 weeks vs the 6 before, within rep ranges where it can (as Health compares).
     pub change: f64,
     /// The same comparison one window earlier, if there was one.
     pub prior_change: Option<f64>,
@@ -52,7 +53,7 @@ pub struct LiftFacts<'a> {
 /// The lift's state and at most one suggestion. Your rating comes first, then the first rule that fits.
 pub fn assess(f: LiftFacts) -> (LiftState, Option<String>) {
     let score = strength_score(f.change, f.goal);
-    let state = if f.change.abs() > IMPLAUSIBLE_CHANGE {
+    let state = if f.change.abs() > MAX_PLAUSIBLE_CHANGE {
         LiftState::Check
     } else if score <= -0.4 {
         LiftState::Sliding
@@ -103,9 +104,7 @@ pub struct LiftsView {
 
 #[derive(Default)]
 struct LiftWindows {
-    best: [f64; 3],
     sets: [usize; 3],
-    sessions: [BTreeSet<i64>; 3],
     last_workout: i64,
     last_at: String,
     last_sets: Vec<(f64, i64)>,
@@ -188,19 +187,24 @@ pub struct PhaseSummary {
     pub overlaps: Vec<(String, f64)>,
 }
 
-fn median(mut v: Vec<f64>) -> Option<f64> {
-    if v.is_empty() {
-        return None;
+/// Change between two groups of sessions as Health measures it. A change too big to be strength
+/// still comes back (from the overall bests), so it can be shown as "check the data".
+fn lift_change(before: &[SessionBest], after: &[SessionBest]) -> Option<f64> {
+    if let Some(c) = matched_change(before, after) {
+        return Some(c.change);
     }
-    v.sort_by(f64::total_cmp);
-    let m = v.len() / 2;
-    Some(if v.len() % 2 == 0 { (v[m - 1] + v[m]) / 2.0 } else { v[m] })
+    let top = |s: &[SessionBest]| s.iter().map(|x| x.e1rm).fold(0.0, f64::max);
+    let (b, a) = (top(before), top(after));
+    (b > 0.0 && a > 0.0).then(|| a / b - 1.0)
+}
+
+fn distinct_days(s: &[SessionBest]) -> usize {
+    s.iter().map(|x| x.date).collect::<BTreeSet<_>>().len()
 }
 
 impl Db {
     pub fn lift_status(&self, today: NaiveDate) -> Result<LiftsView> {
         let goal = self.current_goal(today)?;
-        let formula = self.formula()?;
         let (split, split2) = (today - Duration::days(STRENGTH_DAYS), today - Duration::days(2 * STRENGTH_DAYS));
         let from = (split2 - Duration::days(STRENGTH_DAYS)).to_string();
         let mut lifts: BTreeMap<i64, LiftWindows> = BTreeMap::new();
@@ -217,12 +221,11 @@ impl Db {
                     l.last_sets.push((kg, r));
                 }
             }
-            if let Some((_, e)) = strength_point(&s, formula) {
-                l.best[w] = l.best[w].max(e);
+            if s.set_type != "warmup" && s.weight_kg.is_some() && s.reps.is_some_and(|r| r <= MAX_TREND_REPS) {
                 l.sets[w] += 1;
-                l.sessions[w].insert(s.workout_id);
             }
         }
+        let bests = self.session_bests(Some(&from), Some(&today.to_string()))?;
 
         let mut stmt = self.conn().prepare("SELECT id, name, kind FROM exercise")?;
         let info: HashMap<i64, (String, Option<String>)> =
@@ -231,11 +234,16 @@ impl Db {
         let (mut out, mut left_out) = (Vec::new(), 0);
         for (ex, l) in lifts {
             let Some((name, kind)) = info.get(&ex) else { continue };
-            let judged = kind.as_deref() == Some("weight_reps") && l.sessions[0].len() >= MIN_SESSIONS && l.sessions[1].len() >= MIN_SESSIONS_BEFORE;
-            if !judged {
+            let mut win: [Vec<SessionBest>; 3] = Default::default();
+            for b in bests.get(&ex).into_iter().flatten() {
+                win[usize::from(b.date <= split) + usize::from(b.date < split2)].push(b.clone());
+            }
+            let change = lift_change(&win[1], &win[0]);
+            let judged = kind.as_deref() == Some("weight_reps") && distinct_days(&win[0]) >= MIN_SESSIONS && distinct_days(&win[1]) >= MIN_SESSIONS_BEFORE;
+            let Some(change) = change.filter(|_| judged) else {
                 left_out += usize::from(l.last_at.get(..10).is_some_and(|d| d > split.to_string().as_str()));
                 continue;
-            }
+            };
             let rating: Option<String> = self
                 .conn()
                 .query_row(
@@ -244,10 +252,9 @@ impl Db {
                     |r| r.get(0),
                 )
                 .optional()?;
-            let change = l.best[0] / l.best[1] - 1.0;
             let (state, suggestion) = assess(LiftFacts {
                 change,
-                prior_change: (l.best[2] > 0.0).then(|| l.best[1] / l.best[2] - 1.0),
+                prior_change: lift_change(&win[2], &win[1]),
                 sets_now: l.sets[0],
                 sets_before: l.sets[1],
                 rating: rating.as_deref(),
@@ -345,14 +352,11 @@ impl Db {
             .query_row("SELECT target_kg, target_date FROM lift_goal WHERE exercise_id = ?1", [exercise_id], |r| Ok((r.get(0)?, r.get(1)?)))
             .optional()?;
         let Some((target_kg, target_date)) = goal else { return Ok(None) };
-        let formula = self.formula()?;
         let from = (today - Duration::weeks(PROJECTION_WEEKS)).to_string();
         let mut best: BTreeMap<NaiveDate, f64> = BTreeMap::new();
-        for s in self.work_sets(Some(exercise_id), Some(&from), Some(&today.to_string()))? {
-            if let Some((_, e)) = strength_point(&s, formula) {
-                let b = best.entry(s.date()).or_default();
-                *b = b.max(e);
-            }
+        for s in self.session_bests(Some(&from), Some(&today.to_string()))?.remove(&exercise_id).unwrap_or_default() {
+            let b = best.entry(s.date).or_default();
+            *b = b.max(s.e1rm);
         }
         let current_kg = best.values().copied().reduce(f64::max);
         let points: Vec<(f64, f64)> = best.iter().map(|(d, e)| ((*d - today).num_days() as f64, *e)).collect();
@@ -367,7 +371,6 @@ impl Db {
     pub fn phase_compare(&self, a: i64, b: i64, today: NaiveDate) -> Result<(PhaseSummary, PhaseSummary)> {
         let phases = self.list_phases()?;
         let find = |id: i64| phases.iter().find(|p| p.id == Some(id)).ok_or_else(|| crate::Error::Format("phase not found".into()));
-        let formula = self.formula()?;
         let mut sides = Vec::new();
         for id in [a, b] {
             let p = find(id)?;
@@ -377,20 +380,22 @@ impl Db {
             let edge = PHASE_END_DAYS.min(days / 2);
             let sets = self.work_sets(None, Some(&start.to_string()), Some(&end.to_string()))?;
             let (mut sessions, mut working) = (BTreeSet::new(), 0usize);
-            let mut ends: HashMap<i64, (f64, f64)> = HashMap::new();
             for s in &sets {
                 if s.set_type != "warmup" {
                     sessions.insert(s.workout_id);
                     working += 1;
                 }
-                if let Some((ex, e)) = strength_point(s, formula) {
-                    let d = s.date();
-                    let v = ends.entry(ex).or_default();
-                    if (d - start).num_days() < edge {
-                        v.0 = v.0.max(e);
+            }
+            // Per lift, its sessions near the start and near the end of the phase.
+            let mut ends: HashMap<i64, (Vec<SessionBest>, Vec<SessionBest>)> = HashMap::new();
+            for (ex, list) in self.session_bests(Some(&start.to_string()), Some(&end.to_string()))? {
+                let v = ends.entry(ex).or_default();
+                for b in list {
+                    if (b.date - start).num_days() < edge {
+                        v.0.push(b.clone());
                     }
-                    if (end - d).num_days() < edge {
-                        v.1 = v.1.max(e);
+                    if (end - b.date).num_days() < edge {
+                        v.1.push(b);
                     }
                 }
             }
@@ -424,14 +429,13 @@ impl Db {
         }
         let (mut sb, eb) = sides.pop().expect("two sides");
         let (mut sa, ea) = sides.pop().expect("two sides");
-        let change = |ends: &HashMap<i64, (f64, f64)>, ex: &i64| {
-            let (s, e) = *ends.get(ex)?;
-            let c = e / s - 1.0;
-            (s > 0.0 && e > 0.0 && c.abs() <= IMPLAUSIBLE_CHANGE).then_some(c)
+        let change = |ends: &HashMap<i64, (Vec<SessionBest>, Vec<SessionBest>)>, ex: &i64| {
+            let (s, e) = ends.get(ex)?;
+            matched_change(s, e).map(|c| c.change)
         };
         let both: Vec<(f64, f64)> = ea.keys().filter_map(|ex| Some((change(&ea, ex)?, change(&eb, ex)?))).collect();
-        sa.median_change = median(both.iter().map(|c| c.0).collect());
-        sb.median_change = median(both.iter().map(|c| c.1).collect());
+        sa.median_change = median(&mut both.iter().map(|c| c.0).collect::<Vec<_>>());
+        sb.median_change = median(&mut both.iter().map(|c| c.1).collect::<Vec<_>>());
         (sa.lifts_compared, sb.lifts_compared) = (both.len(), both.len());
         Ok((sa, sb))
     }
@@ -633,12 +637,5 @@ mod tests {
         assert_eq!(sb.overlaps[0].0, "Cut");
         assert!(sa.overlaps.is_empty());
         assert!(sb.weeks > 8.0, "open-ended phases run to today: {}", sb.weeks);
-    }
-
-    #[test]
-    fn median_handles_even_and_empty() {
-        assert_eq!(median(vec![]), None);
-        assert_eq!(median(vec![3.0, 1.0, 2.0]), Some(2.0));
-        assert_eq!(median(vec![1.0, 2.0]), Some(1.5));
     }
 }

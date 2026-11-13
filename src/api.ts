@@ -186,6 +186,18 @@ export interface DayHealth {
   steps: number | null;
 }
 
+/** Whether many lifts are down at once and the watch agrees (crates/core/src/fatigue.rs). */
+export interface FatigueReport {
+  level: "ok" | "watch" | "deload";
+  /** One sentence; empty when level is "ok". */
+  summary: string;
+  lifts_down: number;
+  lifts_tracked: number;
+  /** Most down first; `change` is the last two weeks against the six before (−0.03 = 3 % down). */
+  lifts: { exercise_id: number; name: string; change: number; down: boolean }[];
+  recovery: { kind: "hrv" | "resting_hr" | "sleep"; off: boolean; detail: string }[];
+}
+
 /** What a watch / health app import added. */
 export interface WearableSummary {
   weights: number;
@@ -350,6 +362,17 @@ export interface WeekMuscleSets {
   volume_kg: number;
 }
 
+/** One stretch of training for a muscle: its weekly sets and the strength change it came with (crates/core/src/response.rs). */
+export interface ResponsePoint {
+  start: string;
+  end: string;
+  sets_per_week: number;
+  /** Against the stretch before: 0.02 = 2 % stronger. */
+  change: number;
+  exercises: number;
+  goal: Goal | null;
+}
+
 export interface LastTrained {
   muscle_id: string;
   last_date: string | null;
@@ -456,6 +479,31 @@ export interface Template {
   color: string | null;
   exercises: TemplateExercise[];
   last_done?: string | null;
+}
+
+/** A change to one template that the routine review can make for you (see crates/core/src/optimizer.rs). */
+export type RoutineFix =
+  | { kind: "set_sets"; template_id: number; index: number; exercise_id: number; sets: number }
+  | { kind: "swap"; template_id: number; index: number; exercise_id: number; to_exercise_id: number }
+  | { kind: "add"; template_id: number; exercise_id: number; sets: number }
+  | { kind: "move_first"; template_id: number; index: number; exercise_id: number };
+
+export interface RoutineFinding {
+  kind: "under_target" | "over_target" | "once_a_week" | "plateau" | "duplicate" | "late" | "joint";
+  severity: "high" | "medium" | "low";
+  title: string;
+  detail: string;
+  muscle_id: string | null;
+  exercise_id: number | null;
+  template_id: number | null;
+  fix_label: string | null;
+  fix: RoutineFix | null;
+}
+
+export interface RoutineReview {
+  /** Name of the active schedule; null when there isn't one. */
+  schedule: string | null;
+  findings: RoutineFinding[];
 }
 
 export interface Schedule {
@@ -569,6 +617,18 @@ export interface MuscleHealth {
   /** -1 (going badly) … 1 (going well); null without data. */
   score: number | null;
   signals: { kind: "volume" | "strength" | "size" | "lean_mass"; score: number; detail: string }[];
+  /** Whether the muscle is likely growing, whatever the goal; null without evidence. */
+  growth: MuscleGrowth | null;
+}
+
+export interface MuscleGrowth {
+  verdict: "growing" | "holding" | "slipping";
+  confidence: "high" | "medium" | "low";
+  /** -1 (shrinking) … 1 (growing). */
+  score: number;
+  /** False when two outcomes (strength, tape, lean mass) point in opposite directions. */
+  agree: boolean;
+  evidence: { kind: "strength" | "size" | "lean_mass" | "volume" | "food"; lean: number; weight: number; outcome: boolean; detail: string }[];
 }
 
 function localToday(): string {
@@ -609,6 +669,18 @@ export interface BackupInfo {
 export const MISSING_WEIGHT_UNIT = "MISSING_WEIGHT_UNIT";
 
 /** Who a measurement is compared with (see crates/core/src/norms.rs). */
+/** Which muscles and movements are strong or weak relative to the rest of you (crates/core/src/balance.rs). */
+export interface StrengthBalance {
+  /** Why there's nothing to compare: profile not set, no weigh-ins, or under three recent lifts with reference data. */
+  missing: "profile" | "bodyweight" | "lifts" | null;
+  /** Most behind first. `balance` is against the middle of all your lifts: −0.1 = 10 % behind. */
+  lifts: { exercise_id: number; name: string; pattern: string | null; ratio: number; balance: number; percentile: number | null; rough: boolean }[];
+  muscles: { muscle_id: string; balance: number; standing: "behind" | "even" | "ahead"; lifts: string[] }[];
+  pairs: { a: string; b: string; a_balance: number; b_balance: number; a_lifts: number; b_lifts: number }[];
+  /** `diff` is (right − left) ÷ their mean; tape values are cm, InBody values kg. */
+  sides: { label: string; source: "tape" | "inbody"; left: number; right: number; diff: number; notable: boolean; date: string }[];
+}
+
 export interface NormWho {
   sex: "male" | "female";
   age: number;
@@ -719,6 +791,7 @@ export const api = {
   /** A Garmin .fit file or a .zip of them, base64. */
   importFit: (data: string) => invoke<WearableSummary>("import_fit", { data }),
   dayHealth: () => invoke<DayHealth[]>("day_health"),
+  fatigue: () => invoke<FatigueReport>("fatigue", { today: localToday() }),
   /** Automatic backup to Download/FitLedger (Android) if due, or now with `force`; returns where it went. */
   autoBackup: (force: boolean) => invoke<string | null>("auto_backup", { force }),
 
@@ -758,6 +831,7 @@ export const api = {
   exerciseStats: (id: number) => invoke<ExerciseStats>("exercise_stats", { id }),
   muscleSets: (from?: string, to?: string) => invoke<MuscleStat[]>("muscle_sets", { from, to }),
   weeklyMuscleSets: (from?: string, to?: string) => invoke<WeekMuscleSets[]>("weekly_muscle_sets", { from, to }),
+  volumeResponse: (muscleId: string) => invoke<ResponsePoint[]>("volume_response", { muscleId, today: localToday() }),
   lastTrained: (today: string) => invoke<LastTrained[]>("last_trained", { today }),
   workoutsPerPeriod: (monthly: boolean, today: string) => invoke<PeriodCount[]>("workouts_per_period", { monthly, today }),
   streak: (today: string) => invoke<Streak>("streak", { today }),
@@ -767,6 +841,9 @@ export const api = {
   listTemplates: () => invoke<Template[]>("list_templates"),
   saveTemplate: (template: Template) => invoke<number>("save_template", { template }),
   archiveTemplate: (id: number) => invoke<void>("archive_template", { id }),
+  routineReview: () => invoke<RoutineReview>("routine_review", { today: localToday() }),
+  /** Resolves to the template as it was before the change (save it again to undo). */
+  applyRoutineFix: (fix: RoutineFix) => invoke<Template>("apply_routine_fix", { fix }),
   templateFromWorkout: (workoutId: number, name: string) =>
     invoke<{ template_id: number; uncertain_notes: [string, string][] }>("template_from_workout", { workoutId, name }),
   activeSchedule: () => invoke<Schedule | null>("active_schedule"),
@@ -822,6 +899,7 @@ export const api = {
   exerciseComparison: (slug: string, who: NormWho, weight: number[], reps: number[]) =>
     invoke<NormReference[]>("exercise_comparison", { slug, who, weight, reps }),
   comparableExercises: (slugs: string[]) => invoke<string[]>("comparable_exercises", { slugs }),
+  strengthBalance: () => invoke<StrengthBalance>("strength_balance", { today: localToday() }),
   /** On-device OCR of an InBody 580 result sheet image (base64); values in storage units. */
   readInbodyImage: (data: string, massUnit: "kg" | "lb") =>
     invoke<{ measured_at: string | null; values: Record<string, number>; doubtful: string[]; mass_unit: "kg" | "lb" | null }>(
