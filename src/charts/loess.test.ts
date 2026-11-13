@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loess } from "./loess";
+import { SPAN_MAX, SPAN_MAX_MANY, autoSpan, loess, spanMax } from "./loess";
 
 describe("loess", () => {
   it("reproduces a straight line exactly", () => {
@@ -29,5 +29,22 @@ describe("loess", () => {
     const ys = xs.map((i) => Math.sin(i / 3) * 5 + i * 0.05);
     const rough = (a: number[]) => a.slice(1).reduce((s, v, i) => s + Math.abs(v - a[i]), 0);
     expect(rough(loess(xs, ys, 0.8))).toBeLessThan(rough(loess(xs, ys, 0.1)));
+  });
+
+  it("starts smoother for short series and lighter for long ones", () => {
+    expect(autoSpan(5)).toBe(SPAN_MAX);
+    expect(autoSpan(20)).toBe(SPAN_MAX);
+    expect(autoSpan(500)).toBe(0.1);
+    const mid = autoSpan(60);
+    expect(mid).toBeLessThan(SPAN_MAX);
+    expect(mid).toBeGreaterThan(0.1);
+    expect(spanMax(50)).toBe(SPAN_MAX);
+    expect(spanMax(300)).toBe(SPAN_MAX_MANY);
+  });
+
+  it("at 0 smoothing the line follows the points", () => {
+    const xs = Array.from({ length: 30 }, (_, i) => i);
+    const ys = xs.map((x) => (x % 3) * 10);
+    loess(xs, ys, 0).forEach((v, i) => expect(v).toBeCloseTo(ys[i], 3));
   });
 });

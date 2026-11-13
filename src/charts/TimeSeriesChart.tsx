@@ -2,7 +2,7 @@ import * as d3 from "d3";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ShareButton } from "../share/ShareDialog";
-import { loess } from "./loess";
+import { SPAN_MAX, autoSpan, loess, spanMax } from "./loess";
 import { useChartTheme, type ChartTheme } from "./theme";
 
 export interface Point {
@@ -100,19 +100,17 @@ function storedTrend(): boolean {
   }
 }
 
-/** The Smoothing slider's position is remembered across charts and restarts too. */
+/** The Smoothing slider's position is remembered across charts and restarts too. Until you move
+ * it, each chart starts from `autoSpan` for its number of points. */
 const SPAN_KEY = "fitledger.chart.span";
-const SPAN_MIN = 0.05;
-const SPAN_MAX = 0.6;
-const SPAN_STEP = 0.01;
-const SPAN_DEFAULT = 0.2;
-function storedSpan(): number {
+const SPAN_STEP = 1 / 600;
+function storedSpan(): number | null {
   try {
     const raw = localStorage.getItem(SPAN_KEY);
     const v = raw === null ? NaN : Number(raw);
-    return Number.isFinite(v) ? Math.min(SPAN_MAX, Math.max(SPAN_MIN, v)) : SPAN_DEFAULT;
+    return Number.isFinite(v) ? Math.min(SPAN_MAX, Math.max(0, v)) : null;
   } catch {
-    return SPAN_DEFAULT;
+    return null;
   }
 }
 
@@ -128,7 +126,7 @@ export function TimeSeriesChart(props: TimeSeriesProps) {
       // Storage unavailable: the choice lasts until the chart closes.
     }
   };
-  const [span, setSpanState] = useState(storedSpan);
+  const [chosenSpan, setSpanState] = useState(storedSpan);
   const setSpan = (v: number) => {
     setSpanState(v);
     try {
@@ -137,8 +135,12 @@ export function TimeSeriesChart(props: TimeSeriesProps) {
       // Storage unavailable: the choice lasts until the chart closes.
     }
   };
+  const dragging = useRef(false);
   const [showBands, setShowBands] = useState(true);
   const [full, setFull] = useState(false);
+  const points = Math.max(0, ...props.series.filter((s) => s.style !== "points").map((s) => s.points.length));
+  const maxSpan = spanMax(points);
+  const span = Math.min(maxSpan, chosenSpan ?? autoSpan(points));
   const smooth = props.smooth ?? { on: smoothOn, span };
   const controls = props.showControls ?? !props.smooth;
   const hasLine = props.series.some((s) => s.style !== "points" && s.points.length > 2);
@@ -161,13 +163,14 @@ export function TimeSeriesChart(props: TimeSeriesProps) {
           Smoothing
           <input
             type="range"
-            min={SPAN_MIN}
-            max={SPAN_MAX}
+            min={0}
+            max={maxSpan}
             step={SPAN_STEP}
             value={span}
-            onChange={(e) => setSpan(Number(e.target.value))}
+            onChange={(e) => !dragging.current && setSpan(Number(e.target.value))}
+            {...sidewaysDrag(maxSpan, setSpan, dragging)}
           />
-          <span className="span-value">{Math.round(span * 100)}%</span>
+          <SpanInput value={span} max={maxSpan} onChange={setSpan} />
         </label>
       )}
       {controls && (props.bands?.length ?? 0) > 0 && (
@@ -224,6 +227,72 @@ export function TimeSeriesChart(props: TimeSeriesProps) {
   );
 }
 
+/**
+ * Android's WebView drops the drag on a native slider that's been turned on its side (the
+ * sideways full-screen chart): only the first touch lands. When the slider is taller than it is
+ * wide, follow the finger here instead, along its length (the overlay turns clockwise, so its
+ * left end is at the top). The slider's own change events are ignored meanwhile (`dragging`), as
+ * they still come, from the wrong position.
+ */
+function sidewaysDrag(max: number, onChange: (v: number) => void, dragging: { current: boolean }) {
+  const follow = (e: React.PointerEvent<HTMLInputElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const f = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+    onChange(Math.round((f * max) / SPAN_STEP) * SPAN_STEP);
+  };
+  const sideways = (e: React.PointerEvent<HTMLInputElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return r.height > r.width;
+  };
+  return {
+    onPointerDown: (e: React.PointerEvent<HTMLInputElement>) => {
+      if (!sideways(e)) return;
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      dragging.current = true;
+      follow(e);
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLInputElement>) => {
+      if (dragging.current) follow(e);
+    },
+    onPointerUp: (e: React.PointerEvent<HTMLInputElement>) => {
+      if (dragging.current) follow(e);
+    },
+    // Let any last change event from the slider go by before listening again.
+    onLostPointerCapture: () => setTimeout(() => (dragging.current = false), 50),
+  };
+}
+
+/** The smoothing as a typed percentage. Follows the slider, except while you're typing in it. */
+function SpanInput({ value, max, onChange }: { value: number; max: number; onChange: (v: number) => void }) {
+  const shown = (value * 100).toFixed(1);
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = (text: string) => {
+    const v = Number(text);
+    if (text.trim() !== "" && Number.isFinite(v)) onChange(Math.min(max, Math.max(0, v / 100)));
+  };
+  return (
+    <span className="span-value">
+      <input
+        type="number"
+        inputMode="decimal"
+        min={0}
+        max={+(max * 100).toFixed(1)}
+        step={0.1}
+        aria-label="Smoothing percent"
+        value={draft ?? shown}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          commit(e.target.value);
+        }}
+        onBlur={() => setDraft(null)}
+        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+      />
+      %
+    </span>
+  );
+}
+
 /** Chart filling the window. On a phone held upright the overlay is turned sideways, so time runs
  *  along the long edge whatever the rotation lock says; "Upright" turns it back. */
 function FullscreenChart({ onClose, toolbar, render }: { onClose: () => void; toolbar: ReactNode; render: (height: number) => ReactNode }) {
@@ -239,7 +308,12 @@ function FullscreenChart({ onClose, toolbar, render }: { onClose: () => void; to
     const resize = () => setPortrait(window.innerHeight > window.innerWidth);
     window.addEventListener("keydown", key);
     window.addEventListener("resize", resize);
+    // The page behind stays put while the chart is open.
+    const root = document.documentElement;
+    const overflow = root.style.overflow;
+    root.style.overflow = "hidden";
     return () => {
+      root.style.overflow = overflow;
       ro.disconnect();
       window.removeEventListener("keydown", key);
       window.removeEventListener("resize", resize);

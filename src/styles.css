@@ -699,9 +699,24 @@ input[type="range"] {
   min-width: 0;
 }
 .span-value {
-  min-width: 3ch;
-  text-align: right;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   font-variant-numeric: tabular-nums;
+}
+.span-value input {
+  width: 5.5ch;
+  min-height: 0;
+  padding: 2px 4px;
+  font: inherit;
+  text-align: right;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.span-value input::-webkit-inner-spin-button,
+.span-value input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 .chart-legend {
   display: flex;
@@ -2368,6 +2383,9 @@ input.num {
   display: flex;
   flex-direction: column;
   padding: calc(env(safe-area-inset-top, 0px) + 8px) 12px calc(env(safe-area-inset-bottom, 0px) + 8px);
+  /* Nothing in here scrolls, so a drag (on the slider, sideways) never turns into a page scroll. */
+  touch-action: none;
+  overscroll-behavior: contain;
 }
 /* Phone held upright: lay the overlay on its side (rotated a quarter turn clockwise). */
 .chart-full.sideways {
